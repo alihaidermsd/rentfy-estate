@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 // Advanced search schema
 const searchSchema = z.object({
-  query: z.string().min(1, 'Search query is required'),
+  query: z.string().optional(), // Made query optional
   type: z.string().optional(),
   category: z.string().optional(),
   city: z.string().optional(),
@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const params = Object.fromEntries(searchParams.entries());
     
+    // Validate and parse parameters, allowing query to be absent
     const validation = searchSchema.safeParse(params);
     if (!validation.success) {
       return NextResponse.json(
@@ -37,7 +38,11 @@ export async function GET(request: NextRequest) {
     const where: any = {
       isActive: true,
       status: 'PUBLISHED',
-      OR: [
+    };
+
+    // Only add OR condition if a query string is provided
+    if (query) {
+      where.OR = [
         { title: { contains: query, mode: 'insensitive' } },
         { description: { contains: query, mode: 'insensitive' } },
         { address: { contains: query, mode: 'insensitive' } },
@@ -45,8 +50,9 @@ export async function GET(request: NextRequest) {
         { state: { contains: query, mode: 'insensitive' } },
         { neighborhood: { contains: query, mode: 'insensitive' } },
         { landmark: { contains: query, mode: 'insensitive' } },
-      ],
-    };
+      ];
+    }
+
 
     if (type) where.type = type;
     if (category) where.category = category;
