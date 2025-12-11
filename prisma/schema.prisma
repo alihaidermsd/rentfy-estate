@@ -1,0 +1,651 @@
+// schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ========== MODELS ==========
+
+// ====== USER MODELS ======
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String
+  image         String?
+  role          String    @default("USER") // Changed from enum to string
+  phone         String?
+  emailVerified Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  isVerified    Boolean   @default(false)
+  lastLogin     DateTime?
+
+  // Profile relations
+  profile         UserProfile?
+  agentProfile    Agent?
+  developerProfile Developer?
+
+  // Property relations
+  ownedProperties Property[] @relation("PropertyOwner")
+  bookings        Booking[]
+  favorites       Favorite[]
+  inquiries       Inquiry[]
+  reviews         Review[]
+  messagesSent    Message[]  @relation("MessageSender")
+  messagesReceived Message[] @relation("MessageReceiver")
+  transactions    Transaction[]
+
+  // Auth relations
+  accounts      Account[]
+  sessions      Session[]
+  notifications Notification[]
+
+  // Audit
+  auditLogs     AuditLog[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("users")
+  @@index([email])
+  @@index([role])
+  @@index([createdAt])
+  @@index([isActive])
+}
+
+model UserProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone       String?
+  bio         String?
+  avatar      String?
+  dateOfBirth DateTime?
+  gender      String?
+  occupation  String?
+
+  // Address
+  address     String?
+  city        String?
+  state       String?
+  zipCode     String?
+  country     String?
+
+  // Preferences
+  preferredContactMethod String? @default("EMAIL")
+  notificationSettings   String? // Store as JSON string
+  language              String?  @default("en")
+
+  // Verification
+  idDocument   String?
+  idVerified   Boolean  @default(false)
+  addressProof String?
+  addressVerified Boolean @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("user_profiles")
+  @@index([city, state])
+  @@index([country])
+  @@index([idVerified])
+}
+
+model Agent {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Professional Info
+  company       String?
+  licenseNumber String?
+  experience    Int?     // Years of experience
+  bio           String?
+  specialties   String?  // Store as comma-separated string
+  languages     String?  // Store as comma-separated string
+  certifications String? // Store as comma-separated string
+
+  // Contact
+  officeAddress String?
+  website       String?
+  socialMedia   String? // Store as JSON string
+
+  // Stats
+  totalListings Int      @default(0)
+  totalSales    Int      @default(0)
+  totalRentals  Int      @default(0)
+  averageRating Float?   @default(0.0)
+  reviewCount   Int      @default(0)
+
+  // Status
+  verified      Boolean  @default(false)
+  featured      Boolean  @default(false)
+  isActive      Boolean  @default(true)
+
+  // Relations
+  properties    Property[]
+  inquiries     Inquiry[]
+  transactions  Transaction[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("agents")
+  @@index([verified])
+  @@index([featured])
+  @@index([company])
+  @@index([averageRating])
+}
+
+model Developer {
+  id                String     @id @default(cuid())
+  userId            String     @unique
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  companyName       String
+  description       String?
+  logo              String?
+  established       Int?      // Year established
+  completedProjects Int        @default(0)
+  ongoingProjects   Int        @default(0)
+
+  // Contact
+  website           String?
+  phone             String?
+  email             String?
+  address           String?
+  registrationNumber String?
+
+  // Specializations
+  specializations   String?   // Store as comma-separated string
+  certifications    String?   // Store as comma-separated string
+
+  // Stats
+  totalListings     Int        @default(0)
+  averageRating     Float?     @default(0.0)
+  reviewCount       Int        @default(0)
+
+  // Status
+  verified          Boolean    @default(false)
+  featured          Boolean    @default(false)
+
+  // Relations
+  projects          Property[]
+
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@map("developers")
+  @@index([companyName])
+  @@index([verified])
+  @@index([established])
+}
+
+// ====== PROPERTY MODELS ======
+model Property {
+  id            String         @id @default(cuid())
+  title         String
+  description   String
+  type          String         // APARTMENT, HOUSE, etc.
+  category      String         // RENT or SALE
+  purpose       String         // RESIDENTIAL, COMMERCIAL, etc.
+  slug          String         @unique
+
+  // Pricing
+  price         Float?          // For sale properties
+  rentPrice     Float?          // For rental properties
+  bookingPrice  Float?          // Booking deposit
+  securityDeposit Float?
+  currency      String          @default("USD")
+  pricePerSqft  Float?
+  maintenanceFee Float?
+
+  // Location
+  address       String
+  city          String
+  state         String
+  country       String
+  zipCode       String?
+  latitude      Float?
+  longitude     Float?
+  neighborhood  String?
+  landmark      String?
+
+  // Details
+  bedrooms      Int?
+  bathrooms     Int?
+  area          Float           // in sq. ft.
+  areaUnit      String          @default("SQFT")
+  yearBuilt     Int?
+  parkingSpaces Int?
+  floors        Int?
+  floorNumber   Int?            // For apartments
+  furnished     Boolean?        @default(false)
+  petFriendly   Boolean?        @default(false)
+  amenities     String?         // Store as comma-separated string
+  utilitiesIncluded Boolean    @default(false)
+
+  // Booking-specific fields
+  minStay       Int?            // Minimum stay in days
+  maxStay       Int?            // Maximum stay in days
+  availableFrom DateTime?
+  instantBook   Boolean        @default(false)
+  checkInTime   String?         @default("14:00")
+  checkOutTime  String?         @default("11:00")
+  cancellationPolicy String?    @default("STRICT")
+
+  // Media
+  images        String?         // Store as comma-separated string
+  videos        String?         // Store as comma-separated string
+  virtualTour   String?
+  floorPlan     String?
+  documents     String?         // Store as JSON string
+
+  // Status
+  status        String          @default("DRAFT") // DRAFT, PUBLISHED, etc.
+  featured      Boolean        @default(false)
+  verified      Boolean        @default(false)
+  isActive      Boolean        @default(true)
+  views         Int            @default(0)
+  featuredUntil DateTime?
+
+  // Relations
+  userId        String
+  user          User           @relation("PropertyOwner", fields: [userId], references: [id], onDelete: Cascade)
+  agentId       String?
+  agent         Agent?         @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  developerId   String?
+  developer     Developer?     @relation(fields: [developerId], references: [id], onDelete: SetNull)
+
+  // Associated data
+  bookings      Booking[]
+  favorites     Favorite[]
+  inquiries     Inquiry[]
+  reviews       Review[]
+  availabilities Availability[]
+  transactions  Transaction[]
+  messages      Message[]
+
+  // Metadata
+  tags          String?         // Store as comma-separated string
+  seoTitle      String?
+  seoDescription String?
+  keywords      String?         // Store as comma-separated string
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  publishedAt   DateTime?
+
+  @@map("properties")
+  @@index([userId])
+  @@index([agentId])
+  @@index([developerId])
+  @@index([type])
+  @@index([category])
+  @@index([status])
+  @@index([city, state])
+  @@index([price])
+  @@index([rentPrice])
+  @@index([bedrooms, bathrooms])
+  @@index([area])
+  @@index([createdAt])
+  @@index([featured])
+  @@index([verified])
+  @@index([slug])
+  @@index([views])
+}
+
+model Availability {
+  id          String   @id @default(cuid())
+  propertyId  String
+  date        DateTime
+  available   Boolean  @default(true)
+  price       Float?   // Custom price for specific date
+  blockedBy   String?  // Booking ID or reason for blocking
+
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("availabilities")
+  @@unique([propertyId, date])
+  @@index([date])
+  @@index([available])
+  @@index([propertyId, date, available])
+}
+
+
+
+// ====== BOOKING & TRANSACTION MODELS ======
+model Booking {
+  id            String       @id @default(cuid())
+  propertyId    String
+  userId        String
+  bookingNumber String       @unique
+  startDate     DateTime
+  endDate       DateTime
+  totalDays     Int
+  totalAmount   Float
+  currency      String       @default("USD")
+
+  // Fees
+  cleaningFee   Float?       @default(0)
+  serviceFee    Float?       @default(0)
+  taxAmount     Float?       @default(0)
+  discountAmount Float?      @default(0)
+
+  // Guest information
+  guests        Int
+  guestName     String
+  guestEmail    String
+  guestPhone    String?
+  guestAddress  String?
+  specialRequests String?
+  checkInTime   String?
+  checkOutTime  String?
+
+  // Status
+  status        String       @default("PENDING") // PENDING, CONFIRMED, etc.
+  paymentStatus String       @default("PENDING") // PENDING, SUCCEEDED, etc.
+  cancellationReason String?
+  paymentMethod String?      // CREDIT_CARD, BANK_TRANSFER, etc.
+
+  // Payment
+  paymentId     String?
+
+  // Relations
+  property      Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments      Payment[]
+  transactions  Transaction[]
+  review        Review?
+
+  // Dates
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  confirmedAt   DateTime?
+  cancelledAt   DateTime?
+  checkInAt     DateTime?
+  checkOutAt    DateTime?
+
+  @@map("bookings")
+  @@index([propertyId])
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([startDate, endDate])
+  @@index([bookingNumber])
+  @@index([createdAt])
+}
+
+model Payment {
+  id                    String       @id @default(cuid())
+  bookingId             String
+  paymentNumber         String       @unique
+  amount                Float
+  currency              String       @default("USD")
+  status                String       @default("PENDING")
+  paymentMethod         String
+  gateway               String       @default("STRIPE")
+  gatewayPaymentId      String?
+  gatewayTransactionId  String?
+  refundId              String?
+
+  // Card details
+  lastFourDigits        String?
+  cardBrand             String?
+  cardExpiry            String?
+
+  booking               Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  processedAt           DateTime?
+  refundedAt           DateTime?
+
+  @@map("payments")
+  @@index([bookingId])
+  @@index([status])
+  @@index([paymentNumber])
+  @@index([gatewayPaymentId])
+  @@index([createdAt])
+}
+
+model Transaction {
+  id              String         @id @default(cuid())
+  transactionType String         // BOOKING, REFUND, COMMISSION, ETC.
+  referenceId     String         // Booking ID or Payment ID
+  propertyId      String?
+  userId          String
+  agentId         String?
+  amount          Float
+  currency        String         @default("USD")
+  status          String         @default("PENDING")
+  description     String?
+  metadata        String?        // Store as JSON string
+
+  property        Property?      @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent           Agent?         @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  booking         Booking?       @relation(fields: [referenceId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("transactions")
+  @@index([userId])
+  @@index([propertyId])
+  @@index([agentId])
+  @@index([referenceId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ====== USER INTERACTION MODELS ======
+model Favorite {
+  id         String   @id @default(cuid())
+  userId     String
+  propertyId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@map("favorites")
+  @@unique([userId, propertyId])
+  @@index([userId])
+  @@index([propertyId])
+}
+
+model Inquiry {
+  id         String       @id @default(cuid())
+  propertyId String
+  userId     String?
+  agentId    String?
+  name       String
+  email      String
+  phone      String?
+  message    String
+  status     String       @default("PENDING")
+  response   String?
+  respondedAt DateTime?
+
+  property   Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user       User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  agent      Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  messages   Message[]
+
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@map("inquiries")
+  @@index([propertyId])
+  @@index([userId])
+  @@index([agentId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Review {
+  id         String      @id @default(cuid())
+  propertyId String
+  userId     String
+  bookingId  String?     @unique
+  rating     Int         @default(5) // 1-5
+  title      String?
+  comment    String?
+  status     String      @default("PENDING")
+  response   String?
+  respondedAt DateTime?
+
+  property   Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking    Booking?    @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@map("reviews")
+  @@unique([propertyId, userId])
+  @@index([propertyId])
+  @@index([userId])
+  @@index([rating])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  senderId    String
+  receiverId  String
+  propertyId  String?
+  inquiryId   String?
+  subject     String?
+  content     String
+  isRead      Boolean  @default(false)
+  attachments String?  // Store as JSON string
+
+  sender      User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  property    Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  inquiry     Inquiry?  @relation(fields: [inquiryId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("messages")
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([propertyId])
+  @@index([inquiryId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ====== NOTIFICATION & SYSTEM MODELS ======
+model Notification {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  message     String
+  type        String
+  relatedId   String?         // ID of related entity
+  relatedType String?         // Type of related entity
+  data        String?         // Store as JSON string
+
+  read        Boolean  @default(false)
+  important   Boolean  @default(false)
+  archived    Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("notifications")
+  @@index([userId])
+  @@index([type])
+  @@index([read])
+  @@index([important])
+  @@index([createdAt])
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String?
+  description String?
+  category    String?
+  isPublic    Boolean  @default(false)
+  dataType    String   @default("STRING")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+  @@index([key])
+  @@index([category])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String
+  entityType  String
+  entityId    String?
+  oldData     String?  // Store as JSON string
+  newData     String?  // Store as JSON string
+  ipAddress   String?
+  userAgent   String?
+
+  createdAt   DateTime @default(now())
+
+  @@map("audit_logs")
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ====== AUTH MODELS ======
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
