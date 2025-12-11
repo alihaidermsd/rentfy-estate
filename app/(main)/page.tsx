@@ -12,6 +12,7 @@ import PropertyCard from '@/components/property/PropertyCard';
 import PropertySearch from '@/components/property/PropertySearch';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import { Property } from '@/types/property';
+import { PropertyMap } from '@/components/maps/PropertyMap'; // Import the new map component
 
 // Components
 import FeaturedProperties from './components/FeaturedProperties';
@@ -26,8 +27,6 @@ import { authOptions } from '@/lib/auth';
 
 const prisma = new PrismaClient();
 
-export const revalidate = 3600; // Revalidate every hour
-
 async function getFeaturedProperties() {
   try {
     const properties = await prisma.property.findMany({
@@ -35,6 +34,8 @@ async function getFeaturedProperties() {
         featured: true,
         isActive: true,
         status: 'PUBLISHED',
+        latitude: { not: null }, // Ensure property has latitude for map
+        longitude: { not: null }, // Ensure property has longitude for map
       },
       include: {
         user: {
@@ -84,7 +85,7 @@ async function getFeaturedProperties() {
         { views: 'desc' },
         { createdAt: 'desc' },
       ],
-      take: 8,
+      take: 8, // Take a few more to have enough for both sections
     });
 
     return properties.map((property: any) => {
@@ -116,37 +117,44 @@ async function getPropertyStats() {
 }
 
 export default async function HomePage() {
-  const [featuredProperties, propertyStats] = await Promise.all([
+  const [allFeaturedProperties, propertyStats] = await Promise.all([
     getFeaturedProperties(),
     getPropertyStats(),
   ]);
 
-  const heroBackground = 'https://images.unsplash.com/photo-1518780664697-55e3ad937233?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80';
+  // Take a subset of properties for the map, e.g., the first 5 with valid lat/lng
+  const mapProperties = allFeaturedProperties
+    .filter(p => p.latitude !== null && p.longitude !== null)
+    .slice(0, 5)
+    .map(p => ({
+      id: p.id,
+      title: p.title,
+      category: p.category,
+      rentPrice: p.rentPrice,
+      price: p.price,
+      city: p.city,
+      state: p.state,
+      images: JSON.parse(p.images || '[]'), // Ensure images are parsed
+      latitude: p.latitude as number,
+      longitude: p.longitude as number,
+    }));
 
   return (
     <div className="min-h-screen">
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-r from-blue-900 to-blue-700 text-white">
-        <div className="absolute inset-0">
-          <Image
-            src={heroBackground}
-            alt="Real Estate Hero"
-            fill
-            className="object-cover opacity-20"
-            priority
-          />
-        </div>
+      {/* Hero Section - Interactive Map */}
+      <section className="relative w-full h-[600px] md:h-[700px] overflow-hidden">
+        <PropertyMap properties={mapProperties} className="absolute inset-0 w-full h-full" />
         
-        <div className="relative container mx-auto px-4 py-24 md:py-32">
-          <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl md:text-6xl font-bold mb-6">
-              Find Your Perfect <span className="text-yellow-400">Property</span>
+        <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4">
+          <div className="max-w-4xl mx-auto text-center text-white z-10">
+            <h1 className="text-4xl md:text-6xl font-extrabold mb-6 drop-shadow-lg">
+              Find Your Dream <span className="text-yellow-300">Home</span> on the Map
             </h1>
-            <p className="text-xl md:text-2xl mb-8 text-blue-100">
-              Discover the best properties for rent, sale, and investment across the country
+            <p className="text-lg md:text-xl mb-8 text-blue-100 drop-shadow">
+              Explore properties for rent, sale, and investment with our interactive map
             </p>
             
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 md:p-6 shadow-2xl">
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 md:p-6 shadow-2xl max-w-2xl mx-auto">
               <PropertySearch />
             </div>
           </div>
@@ -173,7 +181,7 @@ export default async function HomePage() {
           </div>
 
           <Suspense fallback={<LoadingSpinner />}>
-            <FeaturedProperties initialProperties={featuredProperties} />
+            <FeaturedProperties initialProperties={allFeaturedProperties} />
           </Suspense>
         </div>
       </section>

@@ -33,7 +33,7 @@ export default function SearchPage() {
         const params = new URLSearchParams();
         
         // Add only the filters that exist
-        if (filters.q) params.set('q', filters.q);
+        if (filters.q) params.set('query', filters.q);
         if (filters.type) params.set('type', filters.type);
         if (filters.category) params.set('category', filters.category);
         if (filters.city) params.set('city', filters.city);

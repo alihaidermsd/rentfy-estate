@@ -123,13 +123,13 @@ export function Header() {
             ) : (
               <>
                 <Link 
-                  href="/auth/login" 
+                  href="/login" 
                   className="text-gray-700 hover:text-blue-600 transition-colors"
                 >
                   Login
                 </Link>
                 <Link 
-                  href="/auth/register" 
+                  href="/register" 
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
                 >
                   Sign Up
@@ -224,14 +224,14 @@ export function Header() {
                 ) : (
                   <>
                     <Link
-                      href="/auth/login"
+                      href="/login"
                       onClick={() => setMobileMenuOpen(false)}
                       className="block px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
                     >
                       Login
                     </Link>
                     <Link
-                      href="/auth/register"
+                      href="/register"
                       onClick={() => setMobileMenuOpen(false)}
                       className="block px-4 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-center mt-2"
                     >
