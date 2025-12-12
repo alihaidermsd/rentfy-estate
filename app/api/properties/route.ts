@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
 import { authOptions } from '@/lib/auth';
 import { propertyCreateSchema, propertyQuerySchema } from '@/lib/validations';
-
-const prisma = new PrismaClient();
 
 // GET /api/properties - Get all properties with filters
 export async function GET(request: NextRequest) {
@@ -164,7 +162,7 @@ export async function GET(request: NextRequest) {
 
     // Process properties to include average rating, total reviews, and favorite status
     const propertiesWithStats = properties.map((property: any) => {
-      const { _count, favorites, ...remaningProperty } = property;
+      const { _count, favorites, ...remainingProperty } = property;
       const reviews = (property.reviews || []) as Array<{ rating: number }>;
       const totalReviews = reviews.length; // Use length of the included reviews
       let sumRatings = 0;
@@ -176,7 +174,7 @@ export async function GET(request: NextRequest) {
       const averageRating = totalReviews > 0 ? sumRatings / totalReviews : null;
 
       return {
-        ...remaningProperty,
+        ...remainingProperty,
         averageRating,
         totalReviews,
         totalFavorites: _count.favorites,

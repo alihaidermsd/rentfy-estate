@@ -1,32 +1,74 @@
-'use client'
+'use client';
 
-import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
-import Link from 'next/link'
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import Link from 'next/link';
+
+interface DashboardStats {
+  bookings: number;
+  favorites: number;
+  inquiries: number;
+}
 
 export default function UserDashboard() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-
-  console.log('UserDashboard: session status', status, 'session', session);
+  const router = useRouter();
+  const { data: session, status } = useSession();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/login')
+      router.push('/auth/login');
+      return;
     }
-  }, [status, router])
 
-  if (status === 'loading') {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch('/api/analytics/dashboard/user');
+        if (!response.ok) {
+          if (response.status === 401) {
+            router.push('/auth/login');
+            return;
+          }
+          throw new Error('Failed to fetch stats');
+        }
+        const result = await response.json();
+        if (result.success) {
+          setStats(result.data);
+        }
+      } catch (error) {
+        console.error('Error fetching user stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (status === 'authenticated') {
+      fetchStats();
+    }
+  }, [status, router]);
+
+  if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-lg">Loading...</div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
-    )
+    );
   }
 
   if (!session) {
-    return null
+    return null;
+  }
+
+  if (!stats) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600">Failed to load dashboard stats</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -41,10 +83,10 @@ export default function UserDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow">
             <h3 className="text-lg font-semibold mb-2">My Bookings</h3>
-            <p className="text-2xl font-bold text-blue-600">0</p>
+            <p className="text-2xl font-bold text-blue-600">{stats.bookings}</p>
             <Link 
               href="/dashboard/user/bookings" 
-              className="text-blue-600 hover:text-blue-800 text-sm"
+              className="text-blue-600 hover:text-blue-800 text-sm mt-2 inline-block"
             >
               View all →
             </Link>
@@ -52,10 +94,10 @@ export default function UserDashboard() {
 
           <div className="bg-white p-6 rounded-lg shadow">
             <h3 className="text-lg font-semibold mb-2">Favorites</h3>
-            <p className="text-2xl font-bold text-green-600">0</p>
+            <p className="text-2xl font-bold text-green-600">{stats.favorites}</p>
             <Link 
               href="/dashboard/user/favorites" 
-              className="text-blue-600 hover:text-blue-800 text-sm"
+              className="text-blue-600 hover:text-blue-800 text-sm mt-2 inline-block"
             >
               View favorites →
             </Link>
@@ -63,10 +105,10 @@ export default function UserDashboard() {
 
           <div className="bg-white p-6 rounded-lg shadow">
             <h3 className="text-lg font-semibold mb-2">Inquiries</h3>
-            <p className="text-2xl font-bold text-purple-600">0</p>
+            <p className="text-2xl font-bold text-purple-600">{stats.inquiries}</p>
             <Link 
               href="/dashboard/user/inquiries" 
-              className="text-blue-600 hover:text-blue-800 text-sm"
+              className="text-blue-600 hover:text-blue-800 text-sm mt-2 inline-block"
             >
               View inquiries →
             </Link>
@@ -103,5 +145,5 @@ export default function UserDashboard() {
         </div>
       </div>
     </div>
-  )
+  );
 }

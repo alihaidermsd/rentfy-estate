@@ -28,8 +28,25 @@ export default function LoginPage() {
       if (result?.error) {
         toast.error('Invalid email or password');
       } else {
+        // Get session to determine user role for redirect
+        const sessionRes = await fetch('/api/auth/session');
+        const session = await sessionRes.json();
+        const role = session?.user?.role;
+
+        // Redirect based on role
+        let redirectPath = '/';
+        if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
+          redirectPath = '/dashboard/admin';
+        } else if (role === 'AGENT') {
+          redirectPath = '/dashboard/agent';
+        } else if (role === 'OWNER') {
+          redirectPath = '/dashboard/owner';
+        } else if (role === 'USER') {
+          redirectPath = '/dashboard/user';
+        }
+
         toast.success('Login successful!');
-        router.push('/');
+        router.push(redirectPath);
         router.refresh();
       }
     } catch (error) {
@@ -51,7 +68,7 @@ export default function LoginPage() {
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             Or{' '}
-            <Link href="/(auth)/register" className="font-medium text-blue-600 hover:text-blue-500">
+            <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
               create a new account
             </Link>
           </p>
@@ -106,7 +123,7 @@ export default function LoginPage() {
             </div>
 
             <div className="text-sm">
-              <Link href="/auth/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
+              <Link href="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
                 Forgot your password?
               </Link>
             </div>

@@ -107,8 +107,8 @@ export function ImageUpload({ onFilesChange, initialImageUrls = [], maxFiles = 5
               <Image
                 src={url}
                 alt={`Property image ${index + 1}`}
-                layout="fill"
-                objectFit="cover"
+                fill
+                style={{ objectFit: 'cover' }}
                 className="transition-transform duration-200 group-hover:scale-105"
               />
               <button
@@ -127,8 +127,8 @@ export function ImageUpload({ onFilesChange, initialImageUrls = [], maxFiles = 5
               <Image
                 src={URL.createObjectURL(file)}
                 alt={`New image ${file.name}`}
-                layout="fill"
-                objectFit="cover"
+                fill
+                style={{ objectFit: 'cover' }}
                 className="transition-transform duration-200 group-hover:scale-105"
               />
               <button

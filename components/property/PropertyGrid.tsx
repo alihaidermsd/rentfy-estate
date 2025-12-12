@@ -96,7 +96,7 @@ function PropertyCard({ property }: { property: Property }) {
             {property.category === 'RENT' && <span className="text-sm font-normal">/month</span>}
           </div>
 
-          {property.averageRating > 0 && (
+          {property.averageRating && property.averageRating > 0 && (
             <div className="flex items-center gap-1">
               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
               <span className="text-sm font-medium">{property.averageRating.toFixed(1)}</span>

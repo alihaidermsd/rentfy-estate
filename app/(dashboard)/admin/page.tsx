@@ -1,4 +1,93 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { formatDistanceToNow } from 'date-fns';
+
+interface DashboardStats {
+  users: { total: number; change: string };
+  properties: { total: number; change: string };
+  bookings: { total: number; change: string };
+  revenue: { total: number; change: string };
+  pendingActions: {
+    propertyVerifications: number;
+    agentApplications: number;
+    reports: number;
+  };
+  recentActivity: Array<{
+    id: string;
+    user: string;
+    action: string;
+    entityType: string;
+    time: string;
+  }>;
+}
+
 export default function AdminDashboard() {
+  const router = useRouter();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch('/api/analytics/dashboard/admin');
+        if (!response.ok) {
+          if (response.status === 401) {
+            router.push('/auth/login');
+            return;
+          }
+          throw new Error('Failed to fetch stats');
+        }
+        const result = await response.json();
+        if (result.success) {
+          setStats(result.data);
+        }
+      } catch (error) {
+        console.error('Error fetching admin stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, [router]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-red-600">Failed to load dashboard stats</p>
+        </div>
+      </div>
+    );
+  }
+
+  const formatCurrency = (amount: number) => {
+    if (amount >= 1000000) {
+      return `$${(amount / 1000000).toFixed(1)}M`;
+    } else if (amount >= 1000) {
+      return `$${(amount / 1000).toFixed(1)}K`;
+    }
+    return `$${amount.toFixed(0)}`;
+  };
+
+  const getActivityType = (entityType: string, action: string) => {
+    if (entityType === 'PROPERTY') return 'property';
+    if (entityType === 'BOOKING') return 'booking';
+    if (entityType === 'USER') return 'user';
+    return 'review';
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -19,7 +108,7 @@ export default function AdminDashboard() {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Users</p>
-              <p className="text-2xl font-bold text-gray-900">1,248</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.users.total.toLocaleString()}</p>
             </div>
           </div>
           <div className="mt-4">
@@ -27,7 +116,7 @@ export default function AdminDashboard() {
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
-              +12% from last month
+              +{stats.users.change}% from last month
             </div>
           </div>
         </div>
@@ -42,7 +131,7 @@ export default function AdminDashboard() {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Properties</p>
-              <p className="text-2xl font-bold text-gray-900">856</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.properties.total.toLocaleString()}</p>
             </div>
           </div>
           <div className="mt-4">
@@ -50,7 +139,7 @@ export default function AdminDashboard() {
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
-              +8% from last month
+              +{stats.properties.change}% from last month
             </div>
           </div>
         </div>
@@ -65,7 +154,7 @@ export default function AdminDashboard() {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Bookings</p>
-              <p className="text-2xl font-bold text-gray-900">324</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.bookings.total.toLocaleString()}</p>
             </div>
           </div>
           <div className="mt-4">
@@ -73,7 +162,7 @@ export default function AdminDashboard() {
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
-              +15% from last month
+              +{stats.bookings.change}% from last month
             </div>
           </div>
         </div>
@@ -88,7 +177,7 @@ export default function AdminDashboard() {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-              <p className="text-2xl font-bold text-gray-900">$45.2K</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.revenue.total)}</p>
             </div>
           </div>
           <div className="mt-4">
@@ -96,7 +185,7 @@ export default function AdminDashboard() {
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
-              +22% from last month
+              +{stats.revenue.change}% from last month
             </div>
           </div>
         </div>
@@ -108,30 +197,33 @@ export default function AdminDashboard() {
         <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
-            <button className="text-sm text-blue-600 hover:text-blue-500">View All</button>
+            <Link href="/dashboard/admin/audit-logs" className="text-sm text-blue-600 hover:text-blue-500">
+              View All
+            </Link>
           </div>
           <div className="space-y-4">
-            {[
-              { user: 'John Doe', action: 'created a new property', time: '2 minutes ago', type: 'property' },
-              { user: 'Sarah Smith', action: 'booked a property', time: '1 hour ago', type: 'booking' },
-              { user: 'Mike Johnson', action: 'registered as an agent', time: '2 hours ago', type: 'user' },
-              { user: 'Emily Davis', action: 'left a review', time: '3 hours ago', type: 'review' },
-              { user: 'Alex Wilson', action: 'verified their profile', time: '5 hours ago', type: 'user' },
-            ].map((activity, index) => (
-              <div key={index} className="flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg">
-                <div className={`w-2 h-2 rounded-full ${
-                  activity.type === 'property' ? 'bg-blue-500' :
-                  activity.type === 'booking' ? 'bg-green-500' :
-                  activity.type === 'user' ? 'bg-purple-500' : 'bg-yellow-500'
-                }`} />
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900">
-                    <span className="font-medium">{activity.user}</span> {activity.action}
-                  </p>
-                  <p className="text-xs text-gray-500">{activity.time}</p>
-                </div>
-              </div>
-            ))}
+            {stats.recentActivity.length > 0 ? (
+              stats.recentActivity.map((activity) => {
+                const activityType = getActivityType(activity.entityType, activity.action);
+                return (
+                  <div key={activity.id} className="flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg">
+                    <div className={`w-2 h-2 rounded-full ${
+                      activityType === 'property' ? 'bg-blue-500' :
+                      activityType === 'booking' ? 'bg-green-500' :
+                      activityType === 'user' ? 'bg-purple-500' : 'bg-yellow-500'
+                    }`} />
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-900">
+                        <span className="font-medium">{activity.user}</span> {activity.action.toLowerCase()} {activity.entityType.toLowerCase()}
+                      </p>
+                      <p className="text-xs text-gray-500">{formatDistanceToNow(new Date(activity.time), { addSuffix: true })}</p>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-4">No recent activity</p>
+            )}
           </div>
         </div>
 
@@ -139,34 +231,34 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-6">Quick Actions</h2>
           <div className="space-y-3">
-            <button className="w-full flex items-center space-x-3 p-3 text-left bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors">
+            <Link href="/dashboard/admin/users" className="w-full flex items-center space-x-3 p-3 text-left bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
-              <span>Add New User</span>
-            </button>
+              <span>Manage Users</span>
+            </Link>
             
-            <button className="w-full flex items-center space-x-3 p-3 text-left bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors">
+            <Link href="/dashboard/admin/properties" className="w-full flex items-center space-x-3 p-3 text-left bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>Verify Properties</span>
-            </button>
+            </Link>
             
-            <button className="w-full flex items-center space-x-3 p-3 text-left bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors">
+            <Link href="/dashboard/admin/analytics" className="w-full flex items-center space-x-3 p-3 text-left bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               <span>View Reports</span>
-            </button>
+            </Link>
             
-            <button className="w-full flex items-center space-x-3 p-3 text-left bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition-colors">
+            <Link href="/dashboard/admin/settings" className="w-full flex items-center space-x-3 p-3 text-left bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition-colors">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
               <span>Platform Settings</span>
-            </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -178,37 +270,43 @@ export default function AdminDashboard() {
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-medium text-gray-900">Property Verifications</h3>
-              <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">23 pending</span>
+              <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
+                {stats.pendingActions.propertyVerifications} pending
+              </span>
             </div>
             <p className="text-sm text-gray-600 mb-3">Properties waiting for approval</p>
-            <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors">
+            <Link href="/dashboard/admin/properties?status=pending" className="block w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors text-center">
               Review Properties
-            </button>
+            </Link>
           </div>
 
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-medium text-gray-900">Agent Applications</h3>
-              <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">15 pending</span>
+              <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                {stats.pendingActions.agentApplications} pending
+              </span>
             </div>
             <p className="text-sm text-gray-600 mb-3">Agent profile verifications</p>
-            <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors">
+            <Link href="/dashboard/admin/agents?status=pending" className="block w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors text-center">
               Review Agents
-            </button>
+            </Link>
           </div>
 
           <div className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-medium text-gray-900">User Reports</h3>
-              <span className="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full">8 pending</span>
+              <span className="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full">
+                {stats.pendingActions.reports} pending
+              </span>
             </div>
             <p className="text-sm text-gray-600 mb-3">User-reported issues to resolve</p>
-            <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors">
+            <Link href="/dashboard/admin/inquiries?status=pending" className="block w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors text-center">
               View Reports
-            </button>
+            </Link>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

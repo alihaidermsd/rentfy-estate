@@ -21,29 +21,54 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
+        console.log('[AUTH] Authorize function initiated.');
         if (!credentials?.email || !credentials?.password) {
+          console.log('[AUTH] Missing email or password.');
           return null;
         }
+        console.log(`[AUTH] Attempting to find user with email: ${credentials.email}`);
 
-        const user = await prisma.user.findUnique({
-          where: {
-            email: credentials.email
-          },
-          include: {
-            profile: true
+        const email = String(credentials.email).toLowerCase()
+        let user = null
+        try {
+          user = await prisma.user.findUnique({ where: { email } })
+        } catch (e: any) {
+          if (process.env.NODE_ENV !== 'production' && e?.code === 'P2021') {
+            // If schema/tables are missing in dev, attempt to create them and retry once
+            try {
+              // run db push synchronously
+              const { execSync } = require('child_process')
+              execSync('npx prisma db push', { stdio: 'inherit' })
+              user = await prisma.user.findUnique({ where: { email } })
+            } catch (err) {
+              console.error('Prisma recovery failed in auth authorize:', err)
+            }
+          } else {
+            throw e
           }
-        });
+        }
 
-        if (!user || !user.password) {
+        if (!user) {
+          console.log(`[AUTH] User not found in database for email: ${credentials.email}`);
           return null;
         }
+        console.log('[AUTH] User found in database:', { id: user.id, email: user.email, role: user.role });
+
+        if (!user.password) {
+          console.log(`[AUTH] User ${user.email} found, but has no password set.`);
+          return null;
+        }
+        console.log(`[AUTH] User has a password hash.`);
 
         const isPasswordValid = await compare(credentials.password, user.password);
+        console.log(`[AUTH] Password validation result for ${user.email}: ${isPasswordValid}`);
 
         if (!isPasswordValid) {
+          console.log(`[AUTH] Invalid password for user ${user.email}.`);
           return null;
         }
 
+        console.log(`[AUTH] Login successful for ${user.email}. Returning user object.`);
         return {
           id: user.id,
           email: user.email,

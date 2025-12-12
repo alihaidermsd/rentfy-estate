@@ -57,7 +57,7 @@ async function main() {
       email: 'superadmin@rentfy.com',
       name: 'Super Admin',
       password,
-      role: 'SUPERADMIN',
+      role: 'SUPER_ADMIN',
       emailVerified: true,
       isActive: true,
       isVerified: true,
@@ -243,7 +243,7 @@ async function main() {
       parkingSpaces: 2,
       furnished: true,
       petFriendly: true,
-      amenities: JSON.stringify(['WIFI', 'AIR_CONDITIONING', 'PARKING', 'GYM', 'POOL']),
+      amenities: ['WIFI', 'AIR_CONDITIONING', 'PARKING', 'GYM', 'POOL'].join(','),
       utilitiesIncluded: true,
       minStay: 30,
       maxStay: 365,
@@ -252,10 +252,10 @@ async function main() {
       checkInTime: '15:00',
       checkOutTime: '11:00',
       cancellationPolicy: 'STRICT',
-      images: JSON.stringify([
+      images: [
         'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00',
         'https://images.unsplash.com/photo-1512917774080-9991f1c4c750'
-      ]),
+      ].join(','),
       status: 'PUBLISHED',
       featured: true,
       verified: true,
@@ -294,12 +294,12 @@ async function main() {
       yearBuilt: 2021,
       parkingSpaces: 3,
       petFriendly: true,
-      amenities: JSON.stringify(['WIFI', 'AIR_CONDITIONING', 'SECURITY', 'GARDEN']),
+      amenities: ['WIFI', 'AIR_CONDITIONING', 'SECURITY', 'GARDEN'].join(','),
       utilitiesIncluded: false,
-      images: JSON.stringify([
+      images: [
         'https://images.unsplash.com/photo-1568605114967-8130f3a36994',
         'https://images.unsplash.com/photo-1570129477492-45c003edd2be'
-      ]),
+      ].join(','),
       status: 'PUBLISHED',
       featured: true,
       verified: true,

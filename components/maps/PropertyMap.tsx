@@ -1,4 +1,4 @@
-"use client"
+'use client';
 
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -70,7 +70,7 @@ export function PropertyMap({
                       alt={property.title}
                       width={200}
                       height={120}
-                      objectFit="cover"
+                      style={{ objectFit: 'cover' }}
                       className="rounded-md"
                     />
                   )}

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { authOptions } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -85,14 +87,26 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Get authenticated user
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json()
     const {
-      propertyId, userId, startDate, endDate, guests, guestName, guestEmail,
+      propertyId, startDate, endDate, guests, guestName, guestEmail,
       guestPhone, specialRequests, totalAmount, cleaningFee, serviceFee, taxAmount
     } = body
 
+    // Use authenticated user's ID
+    const userId = session.user.id;
+
     // Validation
-    if (!propertyId || !userId || !startDate || !endDate || !guests || !guestName || !guestEmail || !totalAmount) {
+    if (!propertyId || !startDate || !endDate || !guests || !guestName || !guestEmail || !totalAmount) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }

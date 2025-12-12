@@ -1,30 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useSearch } from '@/hooks/useSearch';
-
-// Simple interface matching your API
-interface SimpleProperty {
-  id: string;
-  title: string;
-  description: string;
-  type: string;
-  category: string;
-  price?: number;
-  rentPrice?: number;
-  city: string;
-  state: string;
-  bedrooms?: number;
-  bathrooms?: number;
-  images: string[];
-  amenities: string[];
-}
+import PropertyCard from '@/components/property/PropertyCard';
+import { Property } from '@/types/property';
+import Link from 'next/link';
 
 export default function SearchPage() {
+  const searchParams = useSearchParams();
   const { filters, updateFilters, resetFilters } = useSearch();
-  const [properties, setProperties] = useState<SimpleProperty[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
+
+  // Filters are already initialized from URL params via useSearch hook
 
   useEffect(() => {
     const searchProperties = async () => {
@@ -42,12 +32,32 @@ export default function SearchPage() {
         if (filters.maxPrice) params.set('maxPrice', filters.maxPrice);
         if (filters.bedrooms) params.set('bedrooms', filters.bedrooms);
 
+        // Set a high limit to get all properties (default is already 1000 in API)
+        if (!params.has('limit')) {
+          params.set('limit', '1000');
+        }
+
         const response = await fetch(`/api/properties/search?${params}`);
         const data = await response.json();
         
         if (data.success) {
-          setProperties(data.data || []);
-          setTotal(data.pagination?.total || 0);
+          // Transform API response to Property type
+          const transformedProperties = (data.data || []).map((prop: any) => ({
+            ...prop,
+            images: typeof prop.images === 'string' 
+              ? prop.images.split(',').filter((img: string) => img.trim()) 
+              : (Array.isArray(prop.images) ? prop.images : []),
+            amenities: typeof prop.amenities === 'string'
+              ? prop.amenities.split(',').filter((a: string) => a.trim())
+              : (Array.isArray(prop.amenities) ? prop.amenities : []),
+            isFavorited: prop.isFavorited || false,
+          }));
+          setProperties(transformedProperties);
+          setTotal(data.pagination?.total || data.count || transformedProperties.length || 0);
+        } else {
+          console.error('Search API error:', data);
+          setProperties([]);
+          setTotal(0);
         }
       } catch (error) {
         console.error('Search failed:', error);
@@ -60,12 +70,18 @@ export default function SearchPage() {
     searchProperties();
   }, [filters]);
 
-  // Simple property grid component
-  const PropertyGrid = ({ properties }: { properties: SimpleProperty[] }) => {
+  // Property grid component
+  const PropertyGrid = ({ properties }: { properties: Property[] }) => {
     if (properties.length === 0) {
       return (
         <div className="text-center py-12">
-          <div className="text-gray-500 text-lg">No properties found</div>
+          <div className="text-gray-500 text-lg mb-4">No properties found</div>
+          <p className="text-gray-400 text-sm mb-4">Try adjusting your filters or search query</p>
+          <Link href="/properties/new">
+            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              List Your Property
+            </button>
+          </Link>
         </div>
       );
     }
@@ -73,28 +89,7 @@ export default function SearchPage() {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {properties.map((property) => (
-          <div key={property.id} className="border rounded-lg overflow-hidden shadow-sm">
-            <div className="aspect-video bg-gray-200">
-              {property.images && property.images.length > 0 ? (
-                <img 
-                  src={property.images[0]} 
-                  alt={property.title}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-gray-300 flex items-center justify-center">
-                  <span className="text-gray-500">No Image</span>
-                </div>
-              )}
-            </div>
-            <div className="p-4">
-              <h3 className="font-semibold text-lg mb-2">{property.title}</h3>
-              <p className="text-gray-600 text-sm mb-2">{property.city}, {property.state}</p>
-              <p className="font-bold text-blue-600">
-                {property.category === 'RENT' ? '$' + (property.rentPrice || 0) + '/month' : '$' + (property.price || 0)}
-              </p>
-            </div>
-          </div>
+          <PropertyCard key={property.id} property={property} />
         ))}
       </div>
     );

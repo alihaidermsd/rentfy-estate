@@ -23,7 +23,7 @@ interface PropertyCardProps {
     bathrooms: number | null;
     area: number;
     areaUnit: string;
-    images: string | null;
+    images: string | string[] | null;
     featured: boolean;
     verified: boolean;
     averageRating: number | null;
@@ -47,7 +47,7 @@ export default function PropertyCard({ property }: PropertyCardProps) {
     e.stopPropagation();
 
     if (!session) {
-      router.push('/login');
+      router.push('/auth/login');
       return;
     }
 
@@ -74,7 +74,15 @@ export default function PropertyCard({ property }: PropertyCardProps) {
     }
   };
 
-  const firstImage = property.images?.split(',')[0] || '';
+  // Handle images as string (comma-separated) or array
+  let firstImage = '';
+  if (property.images) {
+    if (typeof property.images === 'string') {
+      firstImage = property.images.split(',')[0] || '';
+    } else if (Array.isArray(property.images)) {
+      firstImage = property.images[0] || '';
+    }
+  }
 
   return (
     <Link href={`/properties/${property.id}`}>

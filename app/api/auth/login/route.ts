@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
+import { execSync } from 'child_process'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password } = body
+    let { email, password } = body
+    email = String(email).toLowerCase()
 
     // Validation
     if (!email || !password) {
@@ -15,24 +17,50 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: {
-        email: email.toLowerCase(),
-        isActive: true
-      },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-        name: true,
-        image: true,
-        role: true,
-        phone: true
+    // Find user (with recovery if DB schema missing in dev)
+    let user = null
+    try {
+      user = await prisma.user.findUnique({
+        where: { email },
+        select: {
+          id: true,
+          email: true,
+          password: true,
+          name: true,
+          image: true,
+          role: true,
+          phone: true,
+          isActive: true,
+        },
+      })
+    } catch (e: any) {
+      if (process.env.NODE_ENV !== 'production' && e?.code === 'P2021') {
+        console.warn('Prisma table missing. Running `prisma db push` and retrying (dev only).')
+        try {
+          execSync('npx prisma db push', { stdio: 'inherit' })
+          user = await prisma.user.findUnique({
+            where: { email },
+            select: {
+              id: true,
+              email: true,
+              password: true,
+              name: true,
+              image: true,
+              role: true,
+              phone: true,
+              isActive: true,
+            },
+          })
+        } catch (err) {
+          console.error('Failed to run prisma db push from server:', err)
+        }
+      } else {
+        throw e
       }
-    })
+    }
 
-    if (!user) {
+    // Check if user exists and is active
+    if (!user || !user.isActive) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }

@@ -36,13 +36,19 @@ export default async function PropertyPage({ params }: { params: { id: string } 
     console.error("Failed to parse images JSON:", error);
   }
 
-  let amenities = [];
+  let amenities: string[] = [];
   try {
     if (property.amenities) {
-      amenities = JSON.parse(property.amenities as string);
+      // Try parsing as JSON first, if it fails, treat as comma-separated string
+      try {
+        amenities = JSON.parse(property.amenities as string);
+      } catch {
+        // If JSON parse fails, treat as comma-separated string
+        amenities = (property.amenities as string).split(',').map(a => a.trim()).filter(Boolean);
+      }
     }
   } catch (error) {
-    console.error("Failed to parse amenities JSON:", error);
+    console.error("Failed to parse amenities:", error);
   }
 
   return (

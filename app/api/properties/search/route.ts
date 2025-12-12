@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-
-const prisma = new PrismaClient();
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +14,7 @@ const searchSchema = z.object({
   maxPrice: z.string().optional().transform(Number),
   bedrooms: z.string().optional().transform(Number),
   bathrooms: z.string().optional().transform(Number),
-  limit: z.string().optional().default('10').transform(Number),
+  limit: z.string().optional().default('1000').transform(Number),
 });
 
 export async function GET(request: NextRequest) {
@@ -40,37 +38,54 @@ export async function GET(request: NextRequest) {
       status: 'PUBLISHED',
     };
 
-    // Only add OR condition if a query string is provided
-    if (query) {
-      where.OR = [
-        { title: { contains: query, mode: 'insensitive' } },
-        { description: { contains: query, mode: 'insensitive' } },
-        { address: { contains: query, mode: 'insensitive' } },
-        { city: { contains: query, mode: 'insensitive' } },
-        { state: { contains: query, mode: 'insensitive' } },
-        { neighborhood: { contains: query, mode: 'insensitive' } },
-        { landmark: { contains: query, mode: 'insensitive' } },
-      ];
+    // Build query conditions
+    const queryConditions: any[] = [];
+    if (query && query.trim()) {
+      // SQLite's contains is case-sensitive, but we'll search as-is
+      // For better results, you could use Prisma's raw query with LOWER() if needed
+      const searchTerm = query.trim();
+      queryConditions.push(
+        { title: { contains: searchTerm } },
+        { description: { contains: searchTerm } },
+        { address: { contains: searchTerm } },
+        { city: { contains: searchTerm } },
+        { state: { contains: searchTerm } },
+        { neighborhood: { contains: searchTerm } },
+        { landmark: { contains: searchTerm } }
+      );
     }
 
-
-    if (type) where.type = type;
-    if (category) where.category = category;
-    if (city) where.city = { contains: city, mode: 'insensitive' };
-    if (bedrooms !== undefined) where.bedrooms = { gte: bedrooms };
-    if (bathrooms !== undefined) where.bathrooms = { gte: bathrooms };
-
-    // Price filter
+    // Price filter conditions
+    const priceConditions: any[] = [];
     if (minPrice !== undefined || maxPrice !== undefined) {
       const priceFilter: any = {};
       if (minPrice !== undefined) priceFilter.gte = minPrice;
       if (maxPrice !== undefined) priceFilter.lte = maxPrice;
       
-      where.OR = [
+      priceConditions.push(
         { price: priceFilter },
-        { rentPrice: priceFilter },
-      ];
+        { rentPrice: priceFilter }
+      );
     }
+
+    // Combine OR conditions if we have both query and price filters
+    if (queryConditions.length > 0 && priceConditions.length > 0) {
+      where.AND = [
+        { OR: queryConditions },
+        { OR: priceConditions }
+      ];
+    } else if (queryConditions.length > 0) {
+      where.OR = queryConditions;
+    } else if (priceConditions.length > 0) {
+      where.OR = priceConditions;
+    }
+
+    // Other filters
+    if (type) where.type = type;
+    if (category) where.category = category;
+    if (city && city.trim()) where.city = { contains: city.trim() };
+    if (bedrooms !== undefined && bedrooms !== null) where.bedrooms = { gte: bedrooms };
+    if (bathrooms !== undefined && bathrooms !== null) where.bathrooms = { gte: bathrooms };
 
     const properties = await prisma.property.findMany({
       where,
@@ -117,10 +132,18 @@ export async function GET(request: NextRequest) {
       })
     );
 
+    // Get total count for pagination
+    const total = await prisma.property.count({ where });
+
     return NextResponse.json({
       success: true,
       data: propertiesWithRatings,
       count: properties.length,
+      pagination: {
+        total,
+        limit,
+        count: properties.length,
+      },
     });
 
   } catch (error) {

@@ -206,6 +206,7 @@ export function PropertyForm() {
             />
           </div>
         </div>
+      </div>
 
         {/* Location Details */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -349,6 +350,5 @@ export function PropertyForm() {
           </button>
         </div>
       </form>
-    </div >
   )
 }

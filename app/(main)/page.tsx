@@ -24,8 +24,9 @@ import Testimonials from './components/Testimonials';
 
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 
-const prisma = new PrismaClient();
+export const dynamic = 'force-dynamic';
 
 async function getFeaturedProperties() {
   try {
@@ -95,7 +96,13 @@ async function getFeaturedProperties() {
         totalReviews > 0
           ? reviews.reduce((sum: number, review: { rating: number }) => sum + review.rating, 0) / totalReviews
           : null;
-      return { ...rest, averageRating, totalReviews, isFavorited: false };
+      return { 
+        ...rest, 
+        averageRating, 
+        totalReviews, 
+        isFavorited: false,
+        areaUnit: rest.areaUnit || 'SQFT', // Ensure areaUnit is set
+      };
     });
   } catch (error) {
     console.error('Error fetching featured properties:', error);
@@ -134,7 +141,22 @@ export default async function HomePage() {
       price: p.price,
       city: p.city,
       state: p.state,
-      images: JSON.parse(p.images || '[]'), // Ensure images are parsed
+      images: (() => {
+        const imgs: any = (p as any).images;
+        if (!imgs) return [];
+        if (typeof imgs === 'string') {
+          const s = imgs.trim();
+          if (s.startsWith('[')) {
+            try {
+              return JSON.parse(s);
+            } catch {
+              return s.replace(/^[\[]|[\]]$/g, '').split(',').map((x: any) => String(x).trim()).filter(Boolean);
+            }
+          }
+          return s.split(',').map((x: any) => String(x).trim()).filter(Boolean);
+        }
+        return Array.isArray(imgs) ? imgs : [];
+      })(),
       latitude: p.latitude as number,
       longitude: p.longitude as number,
     }));

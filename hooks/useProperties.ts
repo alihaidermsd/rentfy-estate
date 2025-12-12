@@ -8,17 +8,18 @@ import {
 import { z } from 'zod';
 
 // Extend the base property schema to include fields added by the API
-const apiPropertySchema = propertyCreateSchema.extend({
+// Use merge instead of extend since propertyCreateSchema has refinements
+const apiPropertySchema = propertyCreateSchema.merge(z.object({
   id: z.string(), // Add the ID field as it's returned from the API
-  averageRating: z.number(),
+  averageRating: z.number().nullable(),
   totalReviews: z.number(),
   isFavorite: z.boolean(),
   user: z.object({
     id: z.string(),
     name: z.string().nullable(),
-    image: z.string().url().nullable(),
+    image: z.string().nullable(),
   }),
-});
+}));
 
 // Define the type for a single property returned by the API
 export type Property = z.infer<typeof apiPropertySchema>;

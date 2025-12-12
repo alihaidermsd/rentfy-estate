@@ -168,7 +168,6 @@ export default function BookingPage() {
         },
         body: JSON.stringify({
           propertyId,
-          userId: 'current-user-id', // In real app, get from auth
           ...bookingData
         })
       })
