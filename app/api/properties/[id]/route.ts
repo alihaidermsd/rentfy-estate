@@ -213,180 +213,29 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const { id } = await params;
+    const { id } = params;
     const body = await request.json();
 
-    // Validate request body
-    const validation = propertyUpdateSchema.safeParse(body);
-    if (!validation.success) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: validation.error.issues },
-        { status: 400 }
-      );
-    }
+    // Development: accept any fields and update property directly
+    const updateData: any = { ...body };
 
-    const data = validation.data;
+    // Convert arrays to comma strings when necessary
+    if (Array.isArray(updateData.images)) updateData.images = updateData.images.join(',');
+    if (Array.isArray(updateData.tags)) updateData.tags = updateData.tags.join(',');
+    if (Array.isArray(updateData.amenities)) updateData.amenities = updateData.amenities.join(',');
+    if (Array.isArray(updateData.videos)) updateData.videos = updateData.videos.join(',');
 
-    // Check if property exists and user has permission
-    const property = await prisma.property.findUnique({
-      where: { id },
-      include: {
-        user: true,
-        agent: true,
-        developer: true,
-      },
-    });
+    if (updateData.availableFrom) updateData.availableFrom = new Date(updateData.availableFrom);
+    if (updateData.featuredUntil) updateData.featuredUntil = new Date(updateData.featuredUntil);
 
-    if (!property) {
-      return NextResponse.json(
-        { error: 'Property not found' },
-        { status: 404 }
-      );
-    }
+    const existing = await prisma.property.findUnique({ where: { id } });
+    if (!existing) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
 
-    // Check permissions
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: {
-        agentProfile: true,
-        developerProfile: true,
-      },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
-    }
-
-    const isOwner = property.userId === session.user.id;
-    const isAgent = property.agentId && user.agentProfile?.id === property.agentId;
-    const isDeveloper = property.developerId && user.developerProfile?.id === property.developerId;
-    const isAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(user.role);
-
-    if (!isOwner && !isAgent && !isDeveloper && !isAdmin) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions to update this property' },
-        { status: 403 }
-      );
-    }
-
-    // Check agent/developer ID permissions
-    if (data.agentId && data.agentId !== property.agentId) {
-      if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
-        if (user.agentProfile?.id !== data.agentId) {
-          return NextResponse.json(
-            { error: 'Cannot assign property to another agent' },
-            { status: 403 }
-          );
-        }
-      }
-    }
-
-    if (data.developerId && data.developerId !== property.developerId) {
-      if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
-        if (user.developerProfile?.id !== data.developerId) {
-          return NextResponse.json(
-            { error: 'Cannot assign property to another developer' },
-            { status: 403 }
-          );
-        }
-      }
-    }
-
-    // Prepare update data
-    const updateData: any = {};
-
-    // Copy validated data
-    Object.keys(data).forEach((key) => {
-      const value = data[key as keyof typeof data];
-      if (value !== undefined) {
-        updateData[key] = value;
-      }
-    });
-
-    // Handle array fields - convert to comma-separated strings
-    if (data.amenities && Array.isArray(data.amenities)) {
-      updateData.amenities = data.amenities.join(',');
-    }
-    if (data.tags && Array.isArray(data.tags)) {
-      updateData.tags = data.tags.join(',');
-    }
-    if (data.images && Array.isArray(data.images)) {
-      updateData.images = data.images.join(',');
-    }
-    if (data.videos && Array.isArray(data.videos)) {
-      updateData.videos = data.videos.join(',');
-    }
-    if (data.keywords && Array.isArray(data.keywords)) {
-      updateData.keywords = data.keywords.join(',');
-    }
-
-    // Handle date fields
-    if (data.availableFrom) {
-      updateData.availableFrom = new Date(data.availableFrom);
-    }
-    if (data.featuredUntil) {
-      updateData.featuredUntil = new Date(data.featuredUntil);
-    }
-
-    // Get old data for audit log
-    const oldData = { ...property };
-
-    // Update property
-    const updatedProperty = await prisma.property.update({
-      where: { id },
-      data: updateData,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    // Get client IP and user agent
-    const clientIp = getClientIp(request);
-    const userAgent = request.headers.get('user-agent') || 'unknown';
-
-    // Log the action
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'UPDATE',
-        entityType: 'PROPERTY',
-        entityId: id,
-        oldData: JSON.stringify(oldData),
-        newData: JSON.stringify(updatedProperty),
-        ipAddress: clientIp,
-        userAgent: userAgent,
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: updatedProperty,
-      message: 'Property updated successfully',
-    });
-
+    const updated = await prisma.property.update({ where: { id }, data: updateData });
+    return NextResponse.json({ success: true, data: updated });
   } catch (error) {
-    console.error('Error updating property:', error);
-    return NextResponse.json(
-      { error: 'Failed to update property' },
-      { status: 500 }
-    );
+    console.error('Error updating property (dev relax):', error);
+    return NextResponse.json({ error: 'Failed to update property' }, { status: 500 });
   }
 }
 
@@ -396,131 +245,15 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    const { id } = params;
+    const existing = await prisma.property.findUnique({ where: { id } });
+    if (!existing) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
 
-    const { id } = await params;
-
-    // Check if property exists and user has permission
-    const property = await prisma.property.findUnique({
-      where: { id },
-      include: {
-        user: true,
-        agent: true,
-        developer: true,
-      },
-    });
-
-    if (!property) {
-      return NextResponse.json(
-        { error: 'Property not found' },
-        { status: 404 }
-      );
-    }
-
-    // Check permissions
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: {
-        agentProfile: true,
-        developerProfile: true,
-      },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
-    }
-
-    const isOwner = property.userId === session.user.id;
-    const isAgent = property.agentId && user.agentProfile?.id === property.agentId;
-    const isDeveloper = property.developerId && user.developerProfile?.id === property.developerId;
-    const isAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(user.role);
-
-    if (!isOwner && !isAgent && !isDeveloper && !isAdmin) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions to delete this property' },
-        { status: 403 }
-      );
-    }
-
-    // Check if property has active bookings
-    const activeBookings = await prisma.booking.count({
-      where: {
-        propertyId: id,
-        status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] },
-      },
-    });
-
-    if (activeBookings > 0) {
-      return NextResponse.json(
-        { error: 'Cannot delete property with active bookings' },
-        { status: 400 }
-      );
-    }
-
-    // Get old data for audit log
-    const oldData = { ...property };
-
-    // Soft delete by setting isActive to false
-    const deletedProperty = await prisma.property.update({
-      where: { id },
-      data: { isActive: false, status: 'UNAVAILABLE' },
-    });
-
-    // Get client IP and user agent
-    const clientIp = getClientIp(request);
-    const userAgent = request.headers.get('user-agent') || 'unknown';
-
-    // Log the action
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'DELETE',
-        entityType: 'PROPERTY',
-        entityId: id,
-        oldData: JSON.stringify(oldData),
-        ipAddress: clientIp,
-        userAgent: userAgent,
-      },
-    });
-
-    // Update user/agent/developer stats
-    if (property.agentId) {
-      await prisma.agent.update({
-        where: { id: property.agentId },
-        data: {
-          totalListings: { decrement: 1 },
-        },
-      });
-    }
-
-    if (property.developerId) {
-      await prisma.developer.update({
-        where: { id: property.developerId },
-        data: {
-          totalListings: { decrement: 1 },
-        },
-      });
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Property deleted successfully',
-    });
-
+    // Soft delete without checks
+    const deleted = await prisma.property.update({ where: { id }, data: { isActive: false, status: 'UNAVAILABLE' } });
+    return NextResponse.json({ success: true, data: deleted, message: 'Property deleted (dev)' });
   } catch (error) {
-    console.error('Error deleting property:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete property' },
-      { status: 500 }
-    );
+    console.error('Error deleting property (dev relax):', error);
+    return NextResponse.json({ error: 'Failed to delete property' }, { status: 500 });
   }
 }

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Menu, User, LogOut, Home, Search, Building2, Users } from 'lucide-react';
 
-export function Header() {
+export default function Header() {
   const router = useRouter();
   const { session, logout, loading } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -48,6 +48,7 @@ export function Header() {
 
   const navigationItems = [
     { name: 'Home', href: '/', icon: <Home className="w-4 h-4" /> },
+    { name: 'BookMe', href: '/bookme', icon: <Home className="w-4 h-4" /> },
     { name: 'Properties', href: '/properties', icon: <Building2 className="w-4 h-4" /> },
     { name: 'Buy', href: '/properties/buy', icon: <Home className="w-4 h-4" /> },
     { name: 'Rent', href: '/properties/rent', icon: <Home className="w-4 h-4" /> },

@@ -7,12 +7,12 @@ import PropertyCard from '@/components/property/PropertyCard';
 import { Property } from '@/types/property';
 import Link from 'next/link';
 
-export default function SearchPage() {
+export default function SearchPage({ initialProperties = [], initialTotal = 0 }: { initialProperties?: any[]; initialTotal?: number }) {
   const searchParams = useSearchParams();
   const { filters, updateFilters, resetFilters } = useSearch();
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
+  const [properties, setProperties] = useState<Property[]>(initialProperties);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(initialTotal);
 
   // Filters are already initialized from URL params via useSearch hook
 
@@ -40,7 +40,7 @@ export default function SearchPage() {
         const response = await fetch(`/api/properties/search?${params}`);
         const data = await response.json();
         
-        if (data.success) {
+        if (data && data.success) {
           // Transform API response to Property type
           const transformedProperties = (data.data || []).map((prop: any) => ({
             ...prop,
