@@ -123,10 +123,47 @@ async function getPropertyStats() {
   }
 }
 
+async function getAllProperties() {
+  try {
+    const properties = await prisma.property.findMany({
+      where: {
+        status: 'PUBLISHED',
+        isActive: true,
+      },
+      include: {
+        user: { select: { id: true, name: true, image: true } },
+        _count: { select: { favorites: true, reviews: true } },
+        reviews: { where: { status: 'APPROVED' }, select: { rating: true } },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+
+    return properties.map((property: any) => {
+      const { reviews, _count, ...rest } = property;
+      const totalReviews = _count?.reviews ?? 0;
+      const averageRating =
+        totalReviews > 0
+          ? reviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) / totalReviews
+          : null;
+      return {
+        ...rest,
+        averageRating,
+        totalReviews,
+        isFavorited: false,
+        areaUnit: rest.areaUnit || 'SQFT',
+      };
+    });
+  } catch (error) {
+    console.error('Error fetching all properties:', error);
+    return [];
+  }
+}
+
 export default async function HomePage() {
-  const [allFeaturedProperties, propertyStats] = await Promise.all([
+  const [allFeaturedProperties, propertyStats, allProperties] = await Promise.all([
     getFeaturedProperties(),
     getPropertyStats(),
+    getAllProperties(),
   ]);
 
   // Take a subset of properties for the map, e.g., the first 5 with valid lat/lng
@@ -205,6 +242,29 @@ export default async function HomePage() {
           <Suspense fallback={<LoadingSpinner />}>
             <FeaturedProperties initialProperties={allFeaturedProperties} />
           </Suspense>
+        </div>
+      </section>
+      {/* All Properties Section */}
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900">All Properties</h2>
+              <p className="text-gray-600 mt-2">Browse every published property on Rentfy</p>
+            </div>
+            <Link href="/properties">
+              <Button variant="ghost">Browse All</Button>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {allProperties.length === 0 && (
+              <div className="col-span-full text-center text-gray-600">No properties found</div>
+            )}
+            {allProperties.map((p: any) => (
+              <PropertyCard key={p.id} property={p} />
+            ))}
+          </div>
         </div>
       </section>
 

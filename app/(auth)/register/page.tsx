@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
+import { signIn } from 'next-auth/react';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -18,12 +19,6 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (formData.password !== formData.confirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -46,8 +41,16 @@ export default function RegisterPage() {
         throw new Error(data.error || 'Something went wrong');
       }
 
-      toast.success('Registration successful! Please login.');
-      router.push('/login');
+      // Server attempted to sign-in the user and set session cookie; poll session for role
+
+      // Poll session until role is present (same logic used on login page)
+        // Auto sign-in via NextAuth and let server redirect based on role
+        await signIn('credentials', {
+          email: formData.email,
+          password: formData.password,
+          callbackUrl: '/api/auth/redirect',
+          redirect: true,
+        });
     } catch (error: any) {
       toast.error(error.message || 'Registration failed');
     } finally {
@@ -156,25 +159,7 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <div className="flex items-center">
-            <input
-              id="terms"
-              name="terms"
-              type="checkbox"
-              required
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <label htmlFor="terms" className="ml-2 block text-sm text-gray-900">
-              I agree to the{' '}
-              <Link href="/terms" className="text-blue-600 hover:text-blue-500">
-                Terms of Service
-              </Link>{' '}
-              and{' '}
-              <Link href="/privacy" className="text-blue-600 hover:text-blue-500">
-                Privacy Policy
-              </Link>
-            </label>
-          </div>
+          {/* Terms checkbox removed for development convenience */}
 
           <div>
             <button

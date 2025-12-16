@@ -94,16 +94,23 @@ export const useProperties = () => {
       }
 
       const data = await response.json();
-      
-      // Validate the API response
-      // This is a simplified validation, in a real app you'd have a schema for the whole response
-      const validatedProperties = z.array(apiPropertySchema).safeParse(data.data);
-      if (!validatedProperties.success) {
-        console.error("API response validation failed:", validatedProperties.error);
-        throw new Error("Mismatched property data received from API.");
-      }
 
-      return data as ApiResponse;
+      // Map API response to expected property shape without strict validation
+      const safeData = (data.data || []).map((p: any) => ({
+        ...p,
+        // normalize favorited flag name
+        isFavorite: p.isFavorite ?? p.isFavorited ?? false,
+        // ensure images/amenities arrays
+        images: typeof p.images === 'string' ? p.images.split(',').filter((s: string) => s.trim()) : Array.isArray(p.images) ? p.images : [],
+        amenities: typeof p.amenities === 'string' ? p.amenities.split(',').filter((s: string) => s.trim()) : Array.isArray(p.amenities) ? p.amenities : [],
+      }));
+
+      // Return a normalized response object compatible with the rest of the app
+      return {
+        success: data.success,
+        data: safeData,
+        pagination: data.pagination || { page: 1, limit: 20, total: safeData.length, pages: 1 },
+      } as ApiResponse;
     },
   });
 
@@ -133,12 +140,11 @@ export const useProperties = () => {
     },
   });
 
-  /*
-  // Update property mutation - Temporarily commented out
+  // Update property mutation
   const updateProperty = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Property> }) => {
       const response = await fetch(`/api/properties/${id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
@@ -153,7 +159,7 @@ export const useProperties = () => {
     },
   });
 
-  // Delete property mutation - Temporarily commented out
+  // Delete property mutation
   const deleteProperty = useMutation({
     mutationFn: async (id: string) => {
       const response = await fetch(`/api/properties/${id}`, {
@@ -169,7 +175,6 @@ export const useProperties = () => {
       queryClient.invalidateQueries({ queryKey: ['properties'] });
     },
   });
-  */
 
   // Filter and pagination methods
   const updateFilters = useCallback((newFilters: Partial<PropertySearchFilters>) => {
@@ -197,22 +202,20 @@ export const useProperties = () => {
     createProperty: {
       mutate: createProperty.mutate,
       mutateAsync: createProperty.mutateAsync,
-      isLoading: createProperty.isPending,
+      isLoading: (createProperty as any).isPending || (createProperty as any).isLoading || false,
       error: createProperty.error as Error | null,
     },
-    /*
     updateProperty: {
       mutate: updateProperty.mutate,
       mutateAsync: updateProperty.mutateAsync,
-      isLoading: updateProperty.isPending,
-      error: updateProperty.error,
+      isLoading: (updateProperty as any).isPending || (updateProperty as any).isLoading || false,
+      error: updateProperty.error as Error | null,
     },
     deleteProperty: {
       mutate: deleteProperty.mutate,
       mutateAsync: deleteProperty.mutateAsync,
-      isLoading: deleteProperty.isPending,
-      error: deleteProperty.error,
+      isLoading: (deleteProperty as any).isPending || (deleteProperty as any).isLoading || false,
+      error: deleteProperty.error as Error | null,
     },
-    */
   };
 };

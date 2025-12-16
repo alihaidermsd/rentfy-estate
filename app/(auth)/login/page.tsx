@@ -19,36 +19,19 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await signIn('credentials', {
-        email: formData.email,
-        password: formData.password,
-        redirect: false,
-      });
+          // Use NextAuth callback URL to let the server redirect based on session
+          const result = await signIn('credentials', {
+            email: formData.email,
+            password: formData.password,
+            callbackUrl: '/api/auth/redirect',
+            redirect: true,
+          });
 
-      if (result?.error) {
-        toast.error('Invalid email or password');
-      } else {
-        // Get session to determine user role for redirect
-        const sessionRes = await fetch('/api/auth/session');
-        const session = await sessionRes.json();
-        const role = session?.user?.role;
-
-        // Redirect based on role
-        let redirectPath = '/';
-        if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
-          redirectPath = '/dashboard/admin';
-        } else if (role === 'AGENT') {
-          redirectPath = '/dashboard/agent';
-        } else if (role === 'OWNER') {
-          redirectPath = '/dashboard/owner';
-        } else if (role === 'USER') {
-          redirectPath = '/dashboard/user';
-        }
-
-        toast.success('Login successful!');
-        router.push(redirectPath);
-        router.refresh();
-      }
+          // When redirect=true, NextAuth will navigate the browser.
+          // If signIn returns an error object instead, surface it.
+          if ((result as any)?.error) {
+            toast.error('Invalid email or password');
+          }
     } catch (error) {
       toast.error('Something went wrong');
     } finally {

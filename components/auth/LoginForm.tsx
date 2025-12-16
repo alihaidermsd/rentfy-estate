@@ -47,37 +47,13 @@ export function LoginForm() {
     toast.loading("Signing in...");
 
     try {
-      const result = await signIn("credentials", {
-        ...data,
-        redirect: false,
-      });
-
+      // Use NextAuth callback URL to let the server redirect based on session
       toast.dismiss();
-
-      if (result?.error) {
-        toast.error("Login failed. Please check your credentials.");
-        console.error("Login Error:", result.error);
-      } else if (result?.ok) {
-        // We need to get the user's role to redirect correctly.
-        // The session is not immediately available after signIn,
-        // so we make a request to the session endpoint.
-        const sessionRes = await fetch('/api/auth/session');
-        const session = await sessionRes.json();
-
-        const role = session?.user?.role;
-        
-        if (role) {
-          const redirectPath = getDashboardRedirectPath(role);
-          toast.success("Login successful! Redirecting...");
-          router.push(redirectPath);
-          router.refresh(); // Refresh the page to ensure session is fully loaded
-        } else {
-          // Fallback if role is not found
-          toast.success("Login successful!");
-          router.push("/");
-          router.refresh();
-        }
-      }
+      await signIn('credentials', {
+        ...data,
+        callbackUrl: '/api/auth/redirect',
+        redirect: true,
+      });
     } catch (error) {
       toast.dismiss();
       toast.error("An unexpected error occurred.");
