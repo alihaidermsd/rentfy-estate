@@ -1,17 +1,11 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { Search, MapPin, Bed, Bath, Square, Star, TrendingUp } from 'lucide-react';
-import { PrismaClient } from '@prisma/client';
+import {  TrendingUp } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PropertyCard from '@/components/property/PropertyCard';
 import PropertySearch from '@/components/property/PropertySearch';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
-import { Property } from '@/types/property';
 import { PropertyMap } from '@/components/maps/PropertyMap'; // Import the new map component
 
 // Components
@@ -21,9 +15,6 @@ import LocationHighlights from './components/LocationHighlights';
 import StatsSection from './components/StatsSection';
 import HowItWorks from './components/HowItWorks';
 import Testimonials from './components/Testimonials';
-
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -332,7 +323,7 @@ export default async function HomePage() {
                 Browse Properties
               </Button>
             </Link>
-            <Link href="/properties/new">
+            <Link href="/properties/create">
               <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
                 List Your Property
               </Button>

@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
     const propertiesWithStats = properties.map((property: any) => {
       const { _count, favorites, ...remainingProperty } = property;
       const reviews = (property.reviews || []) as Array<{ rating: number }>;
-      const totalReviews = reviews.length; // Use length of the included reviews
+      const totalReviews = reviews.length;
       let sumRatings = 0;
       if (totalReviews > 0) {
         for (const review of reviews) {
@@ -212,46 +212,122 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-
-    // Development: accept any input and fill required fields with defaults
-    const data: any = body || {};
-    const slug = (data.slug && String(data.slug)) || (data.title ? String(data.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now().toString(36) : cuid.slug());
-
-    // Ensure an owner exists
-    let ownerId = data.userId;
-    if (!ownerId) {
-      const firstUser = await prisma.user.findFirst();
-      ownerId = firstUser?.id as string | undefined;
+    
+    // Generate a slug from the title
+    const slug = body.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    
+    // Get user from session (you need to implement this)
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+    
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Please log in to create a property' },
+        { status: 401 }
+      );
     }
-
-    const createData: any = {
-      title: data.title || 'Untitled Property',
-      description: data.description || '',
-      type: data.type || 'HOUSE',
-      category: data.category || 'SALE',
-      purpose: data.purpose || 'RESIDENTIAL',
-      slug,
-      userId: ownerId || undefined,
-      address: data.address || 'Unknown',
-      city: data.city || 'Unknown',
-      state: data.state || 'Unknown',
-      country: data.country || 'Unknown',
-      area: data.area !== undefined ? Number(data.area) : 0,
-      price: data.price !== undefined ? Number(data.price) : null,
-      rentPrice: data.rentPrice !== undefined ? Number(data.rentPrice) : null,
-      bookingPrice: data.bookingPrice !== undefined ? Number(data.bookingPrice) : null,
-      status: data.status || 'PUBLISHED',
-      images: Array.isArray(data.images) ? data.images.join(',') : (data.images || null),
-      tags: Array.isArray(data.tags) ? data.tags.join(',') : (data.tags || null),
-    };
-
-    const property = await prisma.property.create({ data: createData });
-    return NextResponse.json({ success: true, data: property }, { status: 201 });
-
+    
+    // Handle amenities array
+    const amenities = body.amenities ? 
+      (Array.isArray(body.amenities) ? body.amenities : [body.amenities])
+        .filter((a: string) => a.trim() !== '')
+        .join(',') : null;
+    
+    // Handle images array
+    const images = body.images ? 
+      (Array.isArray(body.images) ? body.images : [body.images])
+        .filter((img: string) => img.trim() !== '')
+        .join(',') : null;
+    
+    // Create the property with all fields
+    const property = await prisma.property.create({
+      data: {
+        title: body.title,
+        description: body.description,
+        type: body.type,
+        category: body.category,
+        purpose: body.purpose,
+        slug: slug,
+        
+        // Pricing
+        price: body.price || null,
+        rentPrice: body.rentPrice || null,
+        bookingPrice: body.bookingPrice || null,
+        securityDeposit: body.securityDeposit || null,
+        currency: body.currency || 'USD',
+        pricePerSqft: body.pricePerSqft || null,
+        maintenanceFee: body.maintenanceFee || null,
+        
+        // Location
+        address: body.address,
+        city: body.city,
+        state: body.state,
+        country: body.country,
+        zipCode: body.zipCode || null,
+        latitude: body.latitude ? parseFloat(body.latitude) : null,
+        longitude: body.longitude ? parseFloat(body.longitude) : null,
+        neighborhood: body.neighborhood || null,
+        landmark: body.landmark || null,
+        
+        // Details
+        bedrooms: body.bedrooms ? parseInt(body.bedrooms) : null,
+        bathrooms: body.bathrooms ? parseFloat(body.bathrooms) : null,
+        area: parseFloat(body.area) || 0,
+        areaUnit: body.areaUnit || 'SQFT',
+        yearBuilt: body.yearBuilt ? parseInt(body.yearBuilt) : null,
+        parkingSpaces: body.parkingSpaces ? parseInt(body.parkingSpaces) : null,
+        floors: body.floors ? parseInt(body.floors) : null,
+        floorNumber: body.floorNumber ? parseInt(body.floorNumber) : null,
+        furnished: body.furnished || false,
+        petFriendly: body.petFriendly || false,
+        amenities: amenities,
+        utilitiesIncluded: body.utilitiesIncluded || false,
+        
+        // Booking
+        minStay: body.minStay ? parseInt(body.minStay) : null,
+        maxStay: body.maxStay ? parseInt(body.maxStay) : null,
+        availableFrom: body.availableFrom || null,
+        instantBook: body.instantBook || false,
+        checkInTime: body.checkInTime || '14:00',
+        checkOutTime: body.checkOutTime || '11:00',
+        cancellationPolicy: body.cancellationPolicy || 'STRICT',
+        
+        // Media
+        images: images,
+        videos: body.videos || null,
+        virtualTour: body.virtualTour || null,
+        floorPlan: body.floorPlan || null,
+        
+        // Status
+        status: body.status || 'DRAFT',
+        featured: body.featured || false,
+        verified: false, // Default to not verified
+        
+        // Relations
+        userId: userId,
+        agentId: body.agentId || null,
+        developerId: body.developerId || null,
+      },
+    });
+    
+    return NextResponse.json(
+      { 
+        success: true, 
+        message: 'Property created successfully!',
+        data: property 
+      }, 
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Error creating property:', error);
     return NextResponse.json(
-      { error: 'Failed to create property' },
+      { 
+        error: 'Failed to create property', 
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
