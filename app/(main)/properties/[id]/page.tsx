@@ -27,10 +27,14 @@ export default async function PropertyPage({ params }: { params: { id: string } 
     notFound();
   }
 
-  let images = [];
+  let images: string[] = [];
   try {
     if (property.images) {
-      images = JSON.parse(property.images as string);
+      if (property.images.startsWith('[')) {
+        images = JSON.parse(property.images as string);
+      } else {
+        images = [property.images];
+      }
     }
   } catch (error) {
     console.error("Failed to parse images JSON:", error);

@@ -319,7 +319,7 @@ export default function PropertiesManagement() {
               Refresh
             </button>
             <Link
-              href="/dashboard/admin/properties/new"
+              href="/dashboard/admin/properties/new/edit"
               className="inline-flex items-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
             >
               <span className="mr-2">+</span>

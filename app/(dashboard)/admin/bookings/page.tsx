@@ -69,29 +69,36 @@ interface BookingData {
   property: {
     id: string;
     title: string;
-    type: string;
     address: string;
     city: string;
     state: string;
-    images: string | null;
-    user: {
+    images: string[];
+    host: {
       name: string;
       email: string;
+      phone: string | null;
     };
   };
-  user: {
-    name: string;
+  user?: {
+    id: string;
+    name: string | null;
     email: string;
     phone: string | null;
   };
-  payments: Array<{
+  latestPayment: {
     id: string;
     status: string;
     amount: number;
     paymentMethod: string;
     gateway: string;
     createdAt: string;
-  }>;
+  } | null;
+  statusInfo: {
+    label: string;
+    color: string;
+    description: string;
+    icon: string;
+  };
 }
 
 export default function BookingsManagement() {
@@ -113,16 +120,22 @@ export default function BookingsManagement() {
     confirmedBookings: 0,
     cancelledBookings: 0
   });
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 1,
+  });
 
   useEffect(() => {
     fetchBookings();
-  }, []);
+  }, [pagination.page]);
 
   // Fetch bookings from your existing API
   const fetchBookings = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/bookings?limit=100&includeRelations=true');
+      const response = await fetch(`/api/bookings?page=${pagination.page}&limit=${pagination.limit}&includeRelations=true`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch: ${response.status}`);
@@ -133,6 +146,7 @@ export default function BookingsManagement() {
       // Handle different response formats
       if (data.success && data.data) {
         setBookings(Array.isArray(data.data) ? data.data : []);
+        setPagination(data.pagination);
       } else if (Array.isArray(data)) {
         setBookings(data);
       } else if (data.bookings) {
@@ -774,7 +788,7 @@ export default function BookingsManagement() {
                             {booking.property.city}, {booking.property.state}
                           </div>
                           <div className="text-xs text-gray-400">
-                            Owner: {booking.property.user.name}
+                            Owner: {booking.property.host.name}
                           </div>
                         </div>
                       </div>
@@ -828,7 +842,7 @@ export default function BookingsManagement() {
                     <div className="flex flex-col space-y-2">
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={() => router.push(`/dashboard/admin/bookings/${booking.id}`)}
+                          onClick={() => router.push(`/dashboard/admin/bookings/${booking.id}/edit`)}
                           className="p-1.5 text-blue-600 hover:text-blue-900 rounded hover:bg-blue-50"
                           title="View Details"
                         >
@@ -846,10 +860,7 @@ export default function BookingsManagement() {
                         {booking.status !== 'CANCELLED' && booking.status !== 'COMPLETED' && (
                           <button
                             onClick={() => {
-                              const reason = prompt('Enter cancellation reason:');
-                              if (reason) {
-                                updateBookingStatus(booking.id, 'CANCELLED');
-                              }
+                              updateBookingStatus(booking.id, 'CANCELLED');
                             }}
                             className="p-1.5 text-red-600 hover:text-red-900 rounded hover:bg-red-50"
                             title="Cancel Booking"
