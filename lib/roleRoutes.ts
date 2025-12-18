@@ -1,11 +1,11 @@
 export const ROLE_DASHBOARD_MAP: Record<string, string> = {
-  SUPER_ADMIN: '/admin/dashboard',
-  ADMIN: '/admin/dashboard',
-  USER: '/user/dashboard',
-  OWNER: '/owner/dashboard',
-  DEALER: '/dealer/dashboard',
-  DEVELOPER: '/developer/dashboard',
-  AGENT: '/agent/dashboard',
+  SUPER_ADMIN: '/dashboard/admin',
+  ADMIN: '/dashboard/admin',
+  USER: '/dashboard/user',
+  OWNER: '/dashboard/owner',
+  DEALER: '/dashboard/dealer',
+  DEVELOPER: '/dashboard/developer',
+  AGENT: '/dashboard/agent',
 };
 
 export function getDashboardRouteForRole(role?: string | null) {
