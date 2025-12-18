@@ -30,7 +30,15 @@ export default function BookingModal({ open, onOpenChange, propertyId, propertyT
       const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId, startDate, endDate, guests, guestName: name || 'Guest', guestEmail: email || 'guest@example.com', guestPhone: phone }),
+        body: JSON.stringify({
+          propertyId,
+          startDate: new Date(startDate).toISOString(), // Convert to ISO 8601
+          endDate: new Date(endDate).toISOString(),     // Convert to ISO 8601
+          guests,
+          guestName: name || 'Guest',
+          guestEmail: email || 'guest@example.com',
+          guestPhone: phone
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Booking failed');

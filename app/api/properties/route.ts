@@ -3,9 +3,18 @@ import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
-import { propertyQuerySchema } from '@/lib/validations';
+import { propertyQuerySchema, propertyCreateSchema } from '@/lib/validations';
 import { authOptions } from '@/lib/auth';
-import cuid from 'cuid';
+import slugify from 'slugify';
+
+// Helper function to generate slug
+const generateSlug = (title: string): string => {
+  return slugify(title, {
+    lower: true,
+    strict: true,
+    trim: true,
+  }) + '-' + Date.now();
+};
 
 // GET /api/properties - Get all properties with filters
 export async function GET(request: NextRequest) {
@@ -31,9 +40,10 @@ export async function GET(request: NextRequest) {
     // Build where clause
     const where: any = {
       isActive: true,
-      status: { not: 'DRAFT' },
+      status: 'PUBLISHED',
     };
 
+    // Basic filters
     if (queryData.type) where.type = queryData.type;
     if (queryData.category) where.category = queryData.category;
     if (queryData.purpose) where.purpose = queryData.purpose;
@@ -47,30 +57,44 @@ export async function GET(request: NextRequest) {
     if (queryData.featured !== undefined) where.featured = queryData.featured;
     if (queryData.verified !== undefined) where.verified = queryData.verified;
 
-    // Price filters
+    // Price filters for SALE properties
     if (queryData.category === 'SALE') {
       if (queryData.minPrice !== undefined) where.price = { gte: queryData.minPrice };
       if (queryData.maxPrice !== undefined) where.price = { ...where.price, lte: queryData.maxPrice };
-    } else if (queryData.category === 'RENT') {
+    } 
+    // Price filters for RENT properties
+    else if (queryData.category === 'RENT') {
       if (queryData.minRent !== undefined) where.rentPrice = { gte: queryData.minRent };
       if (queryData.maxRent !== undefined) where.rentPrice = { ...where.rentPrice, lte: queryData.maxRent };
-    } else {
-      // For mixed category queries
-      const priceFilters: any = {};
-      if (queryData.minPrice !== undefined) priceFilters.price = { gte: queryData.minPrice };
-      if (queryData.maxPrice !== undefined) priceFilters.price = { ...priceFilters.price, lte: queryData.maxPrice };
-      if (queryData.minRent !== undefined) priceFilters.rentPrice = { gte: queryData.minRent };
-      if (queryData.maxRent !== undefined) priceFilters.rentPrice = { ...priceFilters.rentPrice, lte: queryData.maxRent };
+    } 
+    // Mixed category or no category specified
+    else {
+      const orConditions = [];
       
-      if (Object.keys(priceFilters).length > 0) {
-        where.OR = [
-          { price: priceFilters.price },
-          { rentPrice: priceFilters.rentPrice },
-        ];
+      if (queryData.minPrice !== undefined || queryData.maxPrice !== undefined) {
+        const saleCondition: any = { category: 'SALE' };
+        if (queryData.minPrice !== undefined) saleCondition.price = { gte: queryData.minPrice };
+        if (queryData.maxPrice !== undefined) saleCondition.price = { ...saleCondition.price, lte: queryData.maxPrice };
+        orConditions.push(saleCondition);
+      }
+      
+      if (queryData.minRent !== undefined || queryData.maxRent !== undefined) {
+        const rentCondition: any = { category: 'RENT' };
+        if (queryData.minRent !== undefined) rentCondition.rentPrice = { gte: queryData.minRent };
+        if (queryData.maxRent !== undefined) rentCondition.rentPrice = { ...rentCondition.rentPrice, lte: queryData.maxRent };
+        orConditions.push(rentCondition);
+      }
+      
+      if (orConditions.length > 0) {
+        if (orConditions.length === 1) {
+          Object.assign(where, orConditions[0]);
+        } else {
+          where.OR = orConditions;
+        }
       }
     }
 
-    // Other filters
+    // Property details filters
     if (queryData.bedrooms !== undefined) where.bedrooms = { gte: queryData.bedrooms };
     if (queryData.bathrooms !== undefined) where.bathrooms = { gte: queryData.bathrooms };
     if (queryData.minArea !== undefined) where.area = { gte: queryData.minArea };
@@ -86,6 +110,7 @@ export async function GET(request: NextRequest) {
         { address: { contains: queryData.search, mode: 'insensitive' } },
         { city: { contains: queryData.search, mode: 'insensitive' } },
         { state: { contains: queryData.search, mode: 'insensitive' } },
+        { neighborhood: { contains: queryData.search, mode: 'insensitive' } },
       ];
     }
 
@@ -128,6 +153,7 @@ export async function GET(request: NextRequest) {
         select: {
           favorites: true,
           bookings: true,
+          reviews: true,
         },
       },
       reviews: {
@@ -143,6 +169,9 @@ export async function GET(request: NextRequest) {
       include.favorites = {
         where: {
           userId,
+        },
+        select: {
+          id: true,
         },
       };
     }
@@ -163,25 +192,29 @@ export async function GET(request: NextRequest) {
 
     // Process properties to include average rating, total reviews, and favorite status
     const propertiesWithStats = properties.map((property: any) => {
-      const { _count, favorites, ...remainingProperty } = property;
-      const reviews = (property.reviews || []) as Array<{ rating: number }>;
+      const { _count, favorites, reviews, ...remainingProperty } = property;
+      
+      // Calculate average rating
       const totalReviews = reviews.length;
-      let sumRatings = 0;
-      if (totalReviews > 0) {
-        for (const review of reviews) {
-          sumRatings += review.rating;
-        }
-      }
-      const averageRating = totalReviews > 0 ? sumRatings / totalReviews : null;
+      const averageRating = totalReviews > 0 
+        ? reviews.reduce((sum: number, review: any) => sum + review.rating, 0) / totalReviews 
+        : null;
 
-      return {
+      // Parse string fields to arrays
+      const parsedProperty = {
         ...remainingProperty,
+        amenities: property.amenities ? property.amenities.split(',').filter(Boolean) : [],
+        tags: property.tags ? property.tags.split(',').filter(Boolean) : [],
+        images: property.images ? property.images.split(',').filter(Boolean) : [],
+        videos: property.videos ? property.videos.split(',').filter(Boolean) : [],
         averageRating,
         totalReviews,
         totalFavorites: _count.favorites,
         totalBookings: _count.bookings,
         isFavorited: !!favorites?.length,
       };
+
+      return parsedProperty;
     });
 
     const totalPages = Math.ceil(total / queryData.limit);
@@ -211,15 +244,6 @@ export async function GET(request: NextRequest) {
 // POST /api/properties - Create a new property
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    
-    // Generate a slug from the title
-    const slug = body.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
-    
-    // Get user from session (you need to implement this)
     const session = await getServerSession(authOptions);
     const userId = session?.user?.id;
     
@@ -229,90 +253,121 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    const body = await request.json();
     
-    // Handle amenities array
-    const amenities = body.amenities ? 
-      (Array.isArray(body.amenities) ? body.amenities : [body.amenities])
-        .filter((a: string) => a.trim() !== '')
-        .join(',') : null;
+    // Validate request body
+    const validation = propertyCreateSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { 
+          error: 'Invalid property data', 
+          details: validation.error.issues 
+        },
+        { status: 400 }
+      );
+    }
+
+    const data = validation.data;
     
-    // Handle images array
-    const images = body.images ? 
-      (Array.isArray(body.images) ? body.images : [body.images])
-        .filter((img: string) => img.trim() !== '')
-        .join(',') : null;
+    // Generate slug from title
+    const slug = generateSlug(data.title);
     
-    // Create the property with all fields
+    // Prepare data for database
+    const dbData: any = {
+      title: data.title,
+      description: data.description,
+      type: data.type,
+      category: data.category,
+      purpose: data.purpose,
+      slug,
+      userId,
+      
+      // Pricing
+      price: data.price,
+      rentPrice: data.rentPrice,
+      bookingPrice: data.bookingPrice,
+      securityDeposit: data.securityDeposit,
+      currency: data.currency,
+      pricePerSqft: data.pricePerSqft,
+      maintenanceFee: data.maintenanceFee,
+      
+      // Location
+      address: data.address,
+      city: data.city,
+      state: data.state,
+      country: data.country,
+      zipCode: data.zipCode,
+      latitude: data.latitude,
+      longitude: data.longitude,
+      neighborhood: data.neighborhood,
+      landmark: data.landmark,
+      
+      // Details
+      bedrooms: data.bedrooms,
+      bathrooms: data.bathrooms,
+      area: data.area,
+      areaUnit: data.areaUnit,
+      yearBuilt: data.yearBuilt,
+      parkingSpaces: data.parkingSpaces,
+      floors: data.floors,
+      floorNumber: data.floorNumber,
+      furnished: data.furnished,
+      petFriendly: data.petFriendly,
+      utilitiesIncluded: data.utilitiesIncluded,
+      
+      // Booking
+      minStay: data.minStay,
+      maxStay: data.maxStay,
+      availableFrom: data.availableFrom ? new Date(data.availableFrom) : null,
+      instantBook: data.instantBook,
+      checkInTime: data.checkInTime,
+      checkOutTime: data.checkOutTime,
+      cancellationPolicy: data.cancellationPolicy,
+      
+      // Media - Convert arrays to comma-separated strings
+      images: data.images.join(','),
+      videos: data.videos?.join(',') || null,
+      virtualTour: data.virtualTour,
+      floorPlan: data.floorPlan,
+      
+      // Status
+      status: data.status,
+      featured: data.featured,
+      verified: data.verified,
+      isActive: true,
+      
+      // Relations
+      agentId: data.agentId,
+      developerId: data.developerId,
+    };
+
+    // Handle amenities if provided
+    if (data.amenities && data.amenities.length > 0) {
+      dbData.amenities = data.amenities.join(',');
+    }
+
+    // Create the property
     const property = await prisma.property.create({
-      data: {
-        title: body.title,
-        description: body.description,
-        type: body.type,
-        category: body.category,
-        purpose: body.purpose,
-        slug: slug,
-        
-        // Pricing
-        price: body.price || null,
-        rentPrice: body.rentPrice || null,
-        bookingPrice: body.bookingPrice || null,
-        securityDeposit: body.securityDeposit || null,
-        currency: body.currency || 'USD',
-        pricePerSqft: body.pricePerSqft || null,
-        maintenanceFee: body.maintenanceFee || null,
-        
-        // Location
-        address: body.address,
-        city: body.city,
-        state: body.state,
-        country: body.country,
-        zipCode: body.zipCode || null,
-        latitude: body.latitude ? parseFloat(body.latitude) : null,
-        longitude: body.longitude ? parseFloat(body.longitude) : null,
-        neighborhood: body.neighborhood || null,
-        landmark: body.landmark || null,
-        
-        // Details
-        bedrooms: body.bedrooms ? parseInt(body.bedrooms) : null,
-        bathrooms: body.bathrooms ? parseFloat(body.bathrooms) : null,
-        area: parseFloat(body.area) || 0,
-        areaUnit: body.areaUnit || 'SQFT',
-        yearBuilt: body.yearBuilt ? parseInt(body.yearBuilt) : null,
-        parkingSpaces: body.parkingSpaces ? parseInt(body.parkingSpaces) : null,
-        floors: body.floors ? parseInt(body.floors) : null,
-        floorNumber: body.floorNumber ? parseInt(body.floorNumber) : null,
-        furnished: body.furnished || false,
-        petFriendly: body.petFriendly || false,
-        amenities: amenities,
-        utilitiesIncluded: body.utilitiesIncluded || false,
-        
-        // Booking
-        minStay: body.minStay ? parseInt(body.minStay) : null,
-        maxStay: body.maxStay ? parseInt(body.maxStay) : null,
-        availableFrom: body.availableFrom || null,
-        instantBook: body.instantBook || false,
-        checkInTime: body.checkInTime || '14:00',
-        checkOutTime: body.checkOutTime || '11:00',
-        cancellationPolicy: body.cancellationPolicy || 'STRICT',
-        
-        // Media
-        images: images,
-        videos: body.videos || null,
-        virtualTour: body.virtualTour || null,
-        floorPlan: body.floorPlan || null,
-        
-        // Status
-        status: body.status || 'DRAFT',
-        featured: body.featured || false,
-        verified: false, // Default to not verified
-        
-        // Relations
-        userId: userId,
-        agentId: body.agentId || null,
-        developerId: body.developerId || null,
-      },
+      data: dbData,
     });
-    
+
+    // If agent is assigned, update their listing count
+    if (data.agentId) {
+      await prisma.agent.update({
+        where: { id: data.agentId },
+        data: { totalListings: { increment: 1 } },
+      });
+    }
+
+    // If developer is assigned, update their listing count
+    if (data.developerId) {
+      await prisma.developer.update({
+        where: { id: data.developerId },
+        data: { totalListings: { increment: 1 } },
+      });
+    }
+
     return NextResponse.json(
       { 
         success: true, 
@@ -321,8 +376,20 @@ export async function POST(request: NextRequest) {
       }, 
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating property:', error);
+    
+    // Handle unique constraint errors
+    if (error.code === 'P2002') {
+      return NextResponse.json(
+        { 
+          error: 'Property with this title already exists',
+          details: 'Please choose a different title'
+        },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
       { 
         error: 'Failed to create property', 

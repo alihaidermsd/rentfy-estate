@@ -90,15 +90,15 @@ export default function AdminDashboard() {
 
   // Quick action handlers
   const handleAddUser = () => {
-    router.push('/admin/users/new');
+    router.push('/admin/users/new/edit');
   };
 
   const handleAddProperty = () => {
-    router.push('/admin/properties/new');
+    router.push('/admin/properties/new/edit');
   };
 
   const handleAddBooking = () => {
-    router.push('/admin/bookings/new');
+    router.push('/admin/bookings/new/edit');
   };
 
   return (
@@ -150,7 +150,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <Link 
-              href="/admin/users" 
+              href="/dashboard/admin/users" 
               className="text-blue-600 hover:text-blue-800 text-sm font-medium"
             >
               View All →
@@ -181,7 +181,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <Link 
-              href="/admin/properties" 
+              href="/dashboard/admin/properties" 
               className="text-green-600 hover:text-green-800 text-sm font-medium"
             >
               View All →
@@ -212,7 +212,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <Link 
-              href="/admin/bookings" 
+              href="/dashboard/admin/bookings" 
               className="text-purple-600 hover:text-purple-800 text-sm font-medium"
             >
               View All →
@@ -243,7 +243,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <Link 
-              href="/admin/revenue" 
+              href="/dashboard/admin/revenue" 
               className="text-yellow-600 hover:text-yellow-800 text-sm font-medium"
             >
               View All →

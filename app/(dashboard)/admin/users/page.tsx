@@ -727,7 +727,7 @@ export default function UsersManagement() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => router.push(`/dashboard/admin/users/${user.id}`)}
+                        onClick={() => router.push(`/dashboard/admin/users/${user.id}/edit`)}
                         className="p-1.5 text-blue-600 hover:text-blue-900 rounded hover:bg-blue-50"
                         title="View Details"
                       >

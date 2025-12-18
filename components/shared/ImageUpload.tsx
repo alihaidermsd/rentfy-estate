@@ -6,44 +6,53 @@ import { X, UploadCloud, FileText } from 'lucide-react'
 import { useDropzone } from 'react-dropzone' // Assuming useDropzone is available
 
 interface ImageUploadProps {
-  onFilesChange: (files: File[]) => void
-  initialImageUrls?: string[] // For editing existing properties
-  maxFiles?: number
+  onFilesChange: (files: File[]) => void;
+  initialImageUrls?: string[];
+  onRemoveImage?: (url: string) => void; // New prop for removing existing images
+  maxFiles?: number;
 }
 
-export function ImageUpload({ onFilesChange, initialImageUrls = [], maxFiles = 5 }: ImageUploadProps) {
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [previewUrls, setPreviewUrls] = useState<string[]>(initialImageUrls)
+export function ImageUpload({
+  onFilesChange,
+  initialImageUrls = [],
+  onRemoveImage,
+  maxFiles = 5,
+}: ImageUploadProps) {
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
 
-  // Effect to update previewUrls when initialImageUrls change (e.g., for editing)
   useEffect(() => {
     setPreviewUrls(initialImageUrls);
   }, [initialImageUrls]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.filter(
-      (file) => !selectedFiles.some((sf) => sf.name === file.name && sf.size === file.size) &&
-                 !previewUrls.some((url) => url === URL.createObjectURL(file)) // Prevent adding already existing URLs
+      (file) => !selectedFiles.some((sf) => sf.name === file.name && sf.size === file.size)
     );
     
-    // Combine existing files with new unique files, respecting maxFiles
-    const combinedFiles = [...selectedFiles, ...newFiles].slice(0, maxFiles);
+    const combinedFiles = [...selectedFiles, ...newFiles];
+    const totalImages = previewUrls.length + combinedFiles.length;
+
+    if (totalImages > maxFiles) {
+        // You might want to show a toast or a message to the user
+        return;
+    }
+    
     setSelectedFiles(combinedFiles);
 
-    // Generate preview URLs for newly selected files
     const newPreviewUrls = newFiles.map(file => URL.createObjectURL(file));
-    setPreviewUrls(prev => [...prev, ...newPreviewUrls].slice(0, maxFiles));
+    setPreviewUrls(prev => [...prev, ...newPreviewUrls]);
 
     onFilesChange(combinedFiles);
-  }, [selectedFiles, previewUrls, maxFiles, onFilesChange])
+  }, [selectedFiles, previewUrls, maxFiles, onFilesChange]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       'image/*': ['.jpeg', '.png', '.jpg', '.gif', '.webp'],
     },
-    maxFiles: maxFiles - selectedFiles.length - previewUrls.length, // Limit based on already selected/initial
-    noClick: true, // Prevent opening file dialog on container click, use button instead
+    maxFiles: maxFiles,
+    noClick: true,
   });
 
   const handleRemoveFile = (fileToRemove: File) => {
@@ -51,19 +60,18 @@ export function ImageUpload({ onFilesChange, initialImageUrls = [], maxFiles = 5
     setSelectedFiles(updatedFiles);
     onFilesChange(updatedFiles);
 
-    // Revoke URL and update previewUrls
     const urlToRemove = URL.createObjectURL(fileToRemove);
     URL.revokeObjectURL(urlToRemove);
     setPreviewUrls(prev => prev.filter(url => url !== urlToRemove));
   };
 
   const handleRemoveInitialImage = (urlToRemove: string) => {
+    if (onRemoveImage) {
+      onRemoveImage(urlToRemove);
+    }
     setPreviewUrls(prev => prev.filter(url => url !== urlToRemove));
-    // Here you might want to inform the parent component that an initial image was removed
-    // For now, we assume initialImageUrls are passed once and handled by the parent's save logic.
-    // If a more complex state management for initial images is needed, it would be added here.
   };
-
+  
   const handleFileInputClick = () => {
     const inputElement = document.createElement('input');
     inputElement.type = 'file';
@@ -78,7 +86,7 @@ export function ImageUpload({ onFilesChange, initialImageUrls = [], maxFiles = 5
     inputElement.click();
   };
 
-  const allImagesCount = selectedFiles.length + previewUrls.length;
+  const allImagesCount = previewUrls.length;
   const canAddMoreFiles = allImagesCount < maxFiles;
 
   return (
@@ -99,51 +107,41 @@ export function ImageUpload({ onFilesChange, initialImageUrls = [], maxFiles = 5
         <p className="text-xs text-muted-foreground mt-2">Max {maxFiles} images. PNG, JPG, GIF, WEBP accepted.</p>
       </div>
 
-      {(previewUrls.length > 0 || selectedFiles.length > 0) && (
+      {(previewUrls.length > 0) && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {/* Display initial images (already uploaded) */}
-          {previewUrls.map((url, index) => (
-            <div key={`initial-${index}`} className="relative group aspect-square rounded-lg overflow-hidden border border-gray-200">
-              <Image
-                src={url}
-                alt={`Property image ${index + 1}`}
-                fill
-                style={{ objectFit: 'cover' }}
-                className="transition-transform duration-200 group-hover:scale-105"
-              />
-              <button
-                type="button"
-                onClick={() => handleRemoveInitialImage(url)}
-                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                aria-label="Remove image"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-          {/* Display newly selected files */}
-          {selectedFiles.map((file, index) => (
-            <div key={`new-${file.name}-${index}`} className="relative group aspect-square rounded-lg overflow-hidden border border-gray-200">
-              <Image
-                src={URL.createObjectURL(file)}
-                alt={`New image ${file.name}`}
-                fill
-                style={{ objectFit: 'cover' }}
-                className="transition-transform duration-200 group-hover:scale-105"
-              />
-              <button
-                type="button"
-                onClick={() => handleRemoveFile(file)}
-                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                aria-label="Remove image"
-              >
-                <X className="h-4 w-4" />
-              </button>
-              <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate">
-                {file.name}
+          {/* Display all images */}
+          {previewUrls.map((url, index) => {
+            const isInitial = initialImageUrls.includes(url);
+            const file = isInitial ? null : selectedFiles.find(f => URL.createObjectURL(f) === url);
+
+            return (
+              <div key={`image-${index}`} className="relative group aspect-square rounded-lg overflow-hidden border border-gray-200">
+                <Image
+                  src={url}
+                  alt={`Property image ${index + 1}`}
+                  fill
+                  style={{ objectFit: 'cover' }}
+                  className="transition-transform duration-200 group-hover:scale-105"
+                  onLoad={() => {
+                    if (!isInitial) URL.revokeObjectURL(url)
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => isInitial ? handleRemoveInitialImage(url) : (file && handleRemoveFile(file))}
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Remove image"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                {file && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate">
+                    {file.name}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {!canAddMoreFiles && (

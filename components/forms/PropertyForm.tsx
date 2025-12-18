@@ -1,30 +1,35 @@
 "use client"
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { toast } from 'react-hot-toast'
-import { Button } from '@/components/ui/button'
-import { ImageUpload } from '@/components/shared/ImageUpload' // Assuming this component exists
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'react-hot-toast';
+import { Button } from '@/components/ui/button';
+import { ImageUpload } from '@/components/shared/ImageUpload';
+import { Property } from '@/types/property'; // Assuming this type is defined
 
 interface PropertyFormData {
-  title: string
-  description: string
-  type: string
-  purpose: string
-  price: string
-  address: string
-  city: string
-  state: string
-  zipCode: string
-  bedrooms: string
-  bathrooms: string
-  area: string
-  amenities: string[]
-  images: string[] // This will store URLs after upload
+  title: string;
+  description: string;
+  type: string;
+  purpose: string;
+  price: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  bedrooms: string;
+  bathrooms: string;
+  area: string;
+  amenities: string[];
+  images: string[];
 }
 
-export function PropertyForm() {
-  const router = useRouter()
+interface PropertyFormProps {
+  initialData?: Property;
+}
+
+export function PropertyForm({ initialData }: PropertyFormProps) {
+  const router = useRouter();
   const [formData, setFormData] = useState<PropertyFormData>({
     title: '',
     description: '',
@@ -39,97 +44,134 @@ export function PropertyForm() {
     bathrooms: '',
     area: '',
     amenities: [],
-    images: []
-  })
-  const [loading, setLoading] = useState(false)
-  const [imageFiles, setImageFiles] = useState<File[]>([]) // To temporarily store File objects for upload
+    images: [],
+  });
+  const [loading, setLoading] = useState(false);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+
+  const isEditMode = Boolean(initialData);
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        title: initialData.title || '',
+        description: initialData.description || '',
+        type: initialData.type || '',
+        purpose: initialData.purpose || '',
+        price: initialData.price?.toString() || '',
+        address: initialData.location?.address || '',
+        city: initialData.location?.city || '',
+        state: initialData.location?.state || '',
+        zipCode: initialData.location?.zipCode || '',
+        bedrooms: initialData.details?.bedrooms?.toString() || '',
+        bathrooms: initialData.details?.bathrooms?.toString() || '',
+        area: initialData.details?.area?.toString() || '',
+        amenities: initialData.amenities || [],
+        images: initialData.images || [],
+      });
+    }
+  }, [initialData]);
 
   const amenitiesList = [
     'WiFi', 'Swimming Pool', 'Gym', 'Parking', 'Air Conditioning',
     'Heating', 'Kitchen', 'Washer', 'Dryer', 'TV', 'Pet Friendly'
-  ]
+  ];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
+    const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
-    }))
-  }
+      [name]: value,
+    }));
+  };
 
   const handleAmenityChange = (amenity: string) => {
     setFormData(prev => ({
       ...prev,
       amenities: prev.amenities.includes(amenity)
         ? prev.amenities.filter(a => a !== amenity)
-        : [...prev.amenities, amenity]
-    }))
-  }
+        : [...prev.amenities, amenity],
+    }));
+  };
 
   const handleImageFilesChange = (files: File[]) => {
-    setImageFiles(files)
-  }
+    setImageFiles(files);
+  };
+  
+  const handleExistingImageRemove = (imageUrl: string) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter(img => img !== imageUrl),
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
 
     try {
-      // 1. Upload images first
-      const imageUrls: string[] = []
+      // 1. Upload new images if any
+      const newImageUrls: string[] = [];
       if (imageFiles.length > 0) {
-        const uploadFormData = new FormData()
+        const uploadFormData = new FormData();
         imageFiles.forEach(file => {
-          uploadFormData.append('files', file)
-        })
+          uploadFormData.append('files', file);
+        });
 
         const uploadResponse = await fetch('/api/upload', {
           method: 'POST',
           body: uploadFormData,
-        })
+        });
 
         if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json()
-          throw new Error(errorData.error || 'Image upload failed')
+          const errorData = await uploadResponse.json();
+          throw new Error(errorData.error || 'Image upload failed');
         }
 
-        const uploadResult = await uploadResponse.json()
-        imageUrls.push(...uploadResult.urls)
+        const uploadResult = await uploadResponse.json();
+        newImageUrls.push(...uploadResult.urls);
       }
 
-      // 2. Submit property data with image URLs
+      // 2. Combine existing and new image URLs
+      const allImageUrls = [...formData.images, ...newImageUrls];
+
+      // 3. Prepare property data for submission
       const propertyData = {
         ...formData,
-        images: imageUrls,
+        images: allImageUrls,
         price: parseFloat(formData.price),
         bedrooms: parseInt(formData.bedrooms),
         bathrooms: parseInt(formData.bathrooms),
         area: parseFloat(formData.area),
-      }
+      };
 
-      const response = await fetch('/api/properties', {
-        method: 'POST',
+      const url = isEditMode ? `/api/properties/${initialData?.id}` : '/api/properties';
+      const method = isEditMode ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(propertyData),
-      })
+      });
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to create property')
+        throw new Error(result.error || `Failed to ${isEditMode ? 'update' : 'create'} property`);
       }
 
-      toast.success('Property created successfully!')
-      router.push('/dashboard/owner/properties') // Redirect to owner's properties list
+      toast.success(`Property ${isEditMode ? 'updated' : 'created'} successfully!`);
+      router.push('/dashboard/owner'); // Redirect to owner's dashboard
+      router.refresh();
     } catch (error: any) {
-      toast.error(error.message || 'Error creating property')
-      console.error('Error creating property:', error)
+      toast.error(error.message || `Error ${isEditMode ? 'updating' : 'creating'} property`);
+      console.error(`Error ${isEditMode ? 'updating' : 'creating'} property:`, error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
@@ -326,7 +368,8 @@ export function PropertyForm() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Property Images</h2>
           <ImageUpload
             onFilesChange={handleImageFilesChange}
-            initialImageUrls={[]} // No initial images for new property
+            initialImageUrls={formData.images}
+            onRemoveImage={handleExistingImageRemove}
             maxFiles={10}
           />
         </div>
@@ -346,7 +389,7 @@ export function PropertyForm() {
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             disabled={loading}
           >
-            {loading ? 'Creating...' : 'Create Property'}
+            {loading ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update Property' : 'Create Property')}
           </button>
         </div>
       </form>

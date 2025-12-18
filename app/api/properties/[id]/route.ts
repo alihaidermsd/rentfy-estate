@@ -1,78 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
-import { z } from 'zod';
+import { propertyUpdateSchema } from '@/lib/validations';
 import { authOptions } from '@/lib/auth';
 
-// Validation schema for updates
-const propertyUpdateSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  description: z.string().min(1).optional(),
-  type: z.enum(['APARTMENT', 'HOUSE', 'VILLA', 'CONDO', 'TOWNHOUSE', 'OFFICE', 'RETAIL', 'INDUSTRIAL', 'LAND', 'OTHER']).optional(),
-  category: z.enum(['RENT', 'SALE']).optional(),
-  purpose: z.enum(['RESIDENTIAL', 'COMMERCIAL', 'INDUSTRIAL', 'AGRICULTURAL']).optional(),
-  price: z.number().min(0).optional().nullable(),
-  rentPrice: z.number().min(0).optional().nullable(),
-  bookingPrice: z.number().min(0).optional().nullable(),
-  securityDeposit: z.number().min(0).optional().nullable(),
-  currency: z.string().optional(),
-  pricePerSqft: z.number().min(0).optional().nullable(),
-  maintenanceFee: z.number().min(0).optional().nullable(),
-  address: z.string().min(1).optional(),
-  city: z.string().min(1).optional(),
-  state: z.string().min(1).optional(),
-  country: z.string().min(1).optional(),
-  zipCode: z.string().optional().nullable(),
-  latitude: z.number().optional().nullable(),
-  longitude: z.number().optional().nullable(),
-  neighborhood: z.string().optional().nullable(),
-  landmark: z.string().optional().nullable(),
-  bedrooms: z.number().int().min(0).optional().nullable(),
-  bathrooms: z.number().int().min(0).optional().nullable(),
-  area: z.number().min(1).optional(),
-  areaUnit: z.enum(['SQFT', 'SQM', 'ACRES']).optional(),
-  yearBuilt: z.number().int().optional().nullable(),
-  parkingSpaces: z.number().int().min(0).optional().nullable(),
-  floors: z.number().int().min(1).optional().nullable(),
-  floorNumber: z.number().int().min(0).optional().nullable(),
-  furnished: z.boolean().optional().nullable(),
-  petFriendly: z.boolean().optional().nullable(),
-  amenities: z.array(z.string()).optional(),
-  utilitiesIncluded: z.boolean().optional(),
-  minStay: z.number().int().min(1).optional().nullable(),
-  maxStay: z.number().int().min(1).optional().nullable(),
-  availableFrom: z.string().optional().nullable(),
-  instantBook: z.boolean().optional(),
-  checkInTime: z.string().optional().nullable(),
-  checkOutTime: z.string().optional().nullable(),
-  cancellationPolicy: z.enum(['FLEXIBLE', 'MODERATE', 'STRICT', 'SUPER_STRICT']).optional().nullable(),
-  images: z.array(z.string()).optional(),
-  videos: z.array(z.string()).optional().nullable(),
-  virtualTour: z.string().optional().nullable(),
-  floorPlan: z.string().optional().nullable(),
-  documents: z.string().optional().nullable(),
-  status: z.enum(['DRAFT', 'PUBLISHED', 'UNAVAILABLE', 'SOLD', 'RENTED']).optional(),
-  featured: z.boolean().optional(),
-  verified: z.boolean().optional(),
-  isActive: z.boolean().optional(),
-  featuredUntil: z.string().optional().nullable(),
-  agentId: z.string().optional().nullable(),
-  developerId: z.string().optional().nullable(),
-  tags: z.array(z.string()).optional(),
-  seoTitle: z.string().optional().nullable(),
-  seoDescription: z.string().optional().nullable(),
-  keywords: z.array(z.string()).optional().nullable(),
-});
+// Helper function to check user permissions
+async function checkPropertyPermission(userId: string, propertyId: string): Promise<boolean> {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { userId: true, agentId: true, developerId: true },
+  });
 
-// Helper function to get client IP
-const getClientIp = (request: NextRequest): string => {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const ips = forwarded.split(',').map(ip => ip.trim());
-    return ips[0] || 'unknown';
-  }
-  return 'unknown';
-};
+  if (!property) return false;
+
+  // Check if user is owner, assigned agent, or assigned developer
+  return property.userId === userId || 
+         property.agentId === userId || 
+         property.developerId === userId;
+}
 
 // GET /api/properties/[id] - Get property by ID
 export async function GET(
@@ -172,6 +117,21 @@ export async function GET(
       );
     }
 
+    // Check if user has favorited this property
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+    
+    let isFavorited = false;
+    if (userId) {
+      const favorite = await prisma.favorite.findFirst({
+        where: {
+          userId,
+          propertyId: id,
+        },
+      });
+      isFavorited = !!favorite;
+    }
+
     // Calculate average rating
     const reviews = await prisma.review.findMany({
       where: { propertyId: id, status: 'APPROVED' },
@@ -191,6 +151,7 @@ export async function GET(
       videos: property.videos ? property.videos.split(',').filter(Boolean) : [],
       averageRating,
       totalReviews: reviews.length,
+      isFavorited,
     };
 
     return NextResponse.json({
@@ -214,31 +175,168 @@ export async function PUT(
 ) {
   try {
     const { id } = params;
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Check if property exists and user has permission
+    const existingProperty = await prisma.property.findUnique({
+      where: { id },
+    });
+
+    if (!existingProperty) {
+      return NextResponse.json(
+        { error: 'Property not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check permissions
+    const hasPermission = await checkPropertyPermission(userId, id);
+    if (!hasPermission && session.user.role !== 'ADMIN') {
+      return NextResponse.json(
+        { error: 'You do not have permission to update this property' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
+    
+    // Validate update data
+    const validation = propertyUpdateSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { 
+          error: 'Invalid update data', 
+          details: validation.error.issues 
+        },
+        { status: 400 }
+      );
+    }
 
-    // Development: accept any fields and update property directly
-    const updateData: any = { ...body };
+    const updateData = validation.data;
+    const dbUpdateData: any = {};
 
-    // Convert arrays to comma strings when necessary
-    if (Array.isArray(updateData.images)) updateData.images = updateData.images.join(',');
-    if (Array.isArray(updateData.tags)) updateData.tags = updateData.tags.join(',');
-    if (Array.isArray(updateData.amenities)) updateData.amenities = updateData.amenities.join(',');
-    if (Array.isArray(updateData.videos)) updateData.videos = updateData.videos.join(',');
+    // Type-safe way to handle updateData fields
+    if (updateData.title !== undefined) dbUpdateData.title = updateData.title;
+    if (updateData.description !== undefined) dbUpdateData.description = updateData.description;
+    if (updateData.type !== undefined) dbUpdateData.type = updateData.type;
+    if (updateData.category !== undefined) dbUpdateData.category = updateData.category;
+    if (updateData.purpose !== undefined) dbUpdateData.purpose = updateData.purpose;
+    
+    // Pricing fields
+    if (updateData.price !== undefined) dbUpdateData.price = updateData.price;
+    if (updateData.rentPrice !== undefined) dbUpdateData.rentPrice = updateData.rentPrice;
+    if (updateData.bookingPrice !== undefined) dbUpdateData.bookingPrice = updateData.bookingPrice;
+    if (updateData.securityDeposit !== undefined) dbUpdateData.securityDeposit = updateData.securityDeposit;
+    if (updateData.currency !== undefined) dbUpdateData.currency = updateData.currency;
+    if (updateData.pricePerSqft !== undefined) dbUpdateData.pricePerSqft = updateData.pricePerSqft;
+    if (updateData.maintenanceFee !== undefined) dbUpdateData.maintenanceFee = updateData.maintenanceFee;
+    
+    // Location fields
+    if (updateData.address !== undefined) dbUpdateData.address = updateData.address;
+    if (updateData.city !== undefined) dbUpdateData.city = updateData.city;
+    if (updateData.state !== undefined) dbUpdateData.state = updateData.state;
+    if (updateData.country !== undefined) dbUpdateData.country = updateData.country;
+    if (updateData.zipCode !== undefined) dbUpdateData.zipCode = updateData.zipCode;
+    if (updateData.latitude !== undefined) dbUpdateData.latitude = updateData.latitude;
+    if (updateData.longitude !== undefined) dbUpdateData.longitude = updateData.longitude;
+    if (updateData.neighborhood !== undefined) dbUpdateData.neighborhood = updateData.neighborhood;
+    if (updateData.landmark !== undefined) dbUpdateData.landmark = updateData.landmark;
+    
+    // Details fields
+    if (updateData.bedrooms !== undefined) dbUpdateData.bedrooms = updateData.bedrooms;
+    if (updateData.bathrooms !== undefined) dbUpdateData.bathrooms = updateData.bathrooms;
+    if (updateData.area !== undefined) dbUpdateData.area = updateData.area;
+    if (updateData.areaUnit !== undefined) dbUpdateData.areaUnit = updateData.areaUnit;
+    if (updateData.yearBuilt !== undefined) dbUpdateData.yearBuilt = updateData.yearBuilt;
+    if (updateData.parkingSpaces !== undefined) dbUpdateData.parkingSpaces = updateData.parkingSpaces;
+    if (updateData.floors !== undefined) dbUpdateData.floors = updateData.floors;
+    if (updateData.floorNumber !== undefined) dbUpdateData.floorNumber = updateData.floorNumber;
+    if (updateData.furnished !== undefined) dbUpdateData.furnished = updateData.furnished;
+    if (updateData.petFriendly !== undefined) dbUpdateData.petFriendly = updateData.petFriendly;
+    if (updateData.utilitiesIncluded !== undefined) dbUpdateData.utilitiesIncluded = updateData.utilitiesIncluded;
+    
+    // Booking fields
+    if (updateData.minStay !== undefined) dbUpdateData.minStay = updateData.minStay;
+    if (updateData.maxStay !== undefined) dbUpdateData.maxStay = updateData.maxStay;
+    if (updateData.instantBook !== undefined) dbUpdateData.instantBook = updateData.instantBook;
+    if (updateData.checkInTime !== undefined) dbUpdateData.checkInTime = updateData.checkInTime;
+    if (updateData.checkOutTime !== undefined) dbUpdateData.checkOutTime = updateData.checkOutTime;
+    if (updateData.cancellationPolicy !== undefined) dbUpdateData.cancellationPolicy = updateData.cancellationPolicy;
+    
+    // Media fields (convert arrays to strings)
+    if (updateData.images !== undefined) dbUpdateData.images = updateData.images.join(',');
+    if (updateData.videos !== undefined) dbUpdateData.videos = updateData.videos ? updateData.videos.join(',') : null;
+    if (updateData.virtualTour !== undefined) dbUpdateData.virtualTour = updateData.virtualTour;
+    if (updateData.floorPlan !== undefined) dbUpdateData.floorPlan = updateData.floorPlan;
+    if (updateData.documents !== undefined) dbUpdateData.documents = updateData.documents;
+    
+    // Status fields
+    if (updateData.status !== undefined) dbUpdateData.status = updateData.status;
+    if (updateData.featured !== undefined) dbUpdateData.featured = updateData.featured;
+    if (updateData.verified !== undefined) dbUpdateData.verified = updateData.verified;
+    if (updateData.isActive !== undefined) dbUpdateData.isActive = updateData.isActive;
+    
+    // Relation fields
+    if (updateData.agentId !== undefined) dbUpdateData.agentId = updateData.agentId;
+    if (updateData.developerId !== undefined) dbUpdateData.developerId = updateData.developerId;
+    
+    // SEO fields (convert arrays to strings)
+    if (updateData.seoTitle !== undefined) dbUpdateData.seoTitle = updateData.seoTitle;
+    if (updateData.seoDescription !== undefined) dbUpdateData.seoDescription = updateData.seoDescription;
+    if (updateData.keywords !== undefined) dbUpdateData.keywords = updateData.keywords ? updateData.keywords.join(',') : null;
+    
+    // Special handling for arrays that need to be converted
+    if (updateData.amenities !== undefined) dbUpdateData.amenities = updateData.amenities.join(',');
+    if (updateData.tags !== undefined) dbUpdateData.tags = updateData.tags.join(',');
+    
+    // Date fields
+    if (updateData.availableFrom !== undefined) {
+      dbUpdateData.availableFrom = updateData.availableFrom ? new Date(updateData.availableFrom) : null;
+    }
+    if (updateData.featuredUntil !== undefined) {
+      dbUpdateData.featuredUntil = updateData.featuredUntil ? new Date(updateData.featuredUntil) : null;
+    }
 
-    if (updateData.availableFrom) updateData.availableFrom = new Date(updateData.availableFrom);
-    if (updateData.featuredUntil) updateData.featuredUntil = new Date(updateData.featuredUntil);
+    // If status is being changed to PUBLISHED, set publishedAt
+    if (updateData.status === 'PUBLISHED' && existingProperty.status !== 'PUBLISHED') {
+      dbUpdateData.publishedAt = new Date();
+    }
 
-    const existing = await prisma.property.findUnique({ where: { id } });
-    if (!existing) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
+    const updatedProperty = await prisma.property.update({
+      where: { id },
+      data: dbUpdateData,
+    });
 
-    const updated = await prisma.property.update({ where: { id }, data: updateData });
-    return NextResponse.json({ success: true, data: updated });
-  } catch (error) {
-    console.error('Error updating property (dev relax):', error);
-    return NextResponse.json({ error: 'Failed to update property' }, { status: 500 });
+    return NextResponse.json({
+      success: true,
+      message: 'Property updated successfully',
+      data: updatedProperty,
+    });
+
+  } catch (error: any) {
+    console.error('Error updating property:', error);
+    
+    if (error.code === 'P2025') {
+      return NextResponse.json(
+        { error: 'Property not found' },
+        { status: 404 }
+      );
+    }
+    
+    return NextResponse.json(
+      { error: 'Failed to update property' },
+      { status: 500 }
+    );
   }
 }
-
 // DELETE /api/properties/[id] - Delete property
 export async function DELETE(
   request: NextRequest,
@@ -246,14 +344,72 @@ export async function DELETE(
 ) {
   try {
     const { id } = params;
-    const existing = await prisma.property.findUnique({ where: { id } });
-    if (!existing) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
 
-    // Soft delete without checks
-    const deleted = await prisma.property.update({ where: { id }, data: { isActive: false, status: 'UNAVAILABLE' } });
-    return NextResponse.json({ success: true, data: deleted, message: 'Property deleted (dev)' });
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Check if property exists
+    const existingProperty = await prisma.property.findUnique({
+      where: { id },
+    });
+
+    if (!existingProperty) {
+      return NextResponse.json(
+        { error: 'Property not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check permissions (only owner or admin can delete)
+    if (existingProperty.userId !== userId && session.user.role !== 'ADMIN') {
+      return NextResponse.json(
+        { error: 'You do not have permission to delete this property' },
+        { status: 403 }
+      );
+    }
+
+    // Soft delete the property
+    const deletedProperty = await prisma.property.update({
+      where: { id },
+      data: {
+        isActive: false,
+        status: 'UNAVAILABLE',
+      },
+    });
+
+    // If agent was assigned, update their listing count
+    if (existingProperty.agentId) {
+      await prisma.agent.update({
+        where: { id: existingProperty.agentId },
+        data: { totalListings: { decrement: 1 } },
+      });
+    }
+
+    // If developer was assigned, update their listing count
+    if (existingProperty.developerId) {
+      await prisma.developer.update({
+        where: { id: existingProperty.developerId },
+        data: { totalListings: { decrement: 1 } },
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Property deleted successfully',
+      data: deletedProperty,
+    });
+
   } catch (error) {
-    console.error('Error deleting property (dev relax):', error);
-    return NextResponse.json({ error: 'Failed to delete property' }, { status: 500 });
+    console.error('Error deleting property:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete property' },
+      { status: 500 }
+    );
   }
 }

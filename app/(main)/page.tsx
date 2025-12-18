@@ -6,7 +6,12 @@ import { Button } from '@/components/ui/button';
 import PropertyCard from '@/components/property/PropertyCard';
 import PropertySearch from '@/components/property/PropertySearch';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
-import { PropertyMap } from '@/components/maps/PropertyMap'; // Import the new map component
+import dynamicImport from 'next/dynamic';
+
+const PropertyMap = dynamicImport(() => import('@/components/maps/PropertyMap').then(mod => mod.PropertyMap), {
+  ssr: false,
+  loading: () => <div className="absolute inset-0 bg-gray-200 flex items-center justify-center"><LoadingSpinner /></div>,
+});
 
 // Components
 import FeaturedProperties from './components/FeaturedProperties';
@@ -173,15 +178,14 @@ export default async function HomePage() {
         const imgs: any = (p as any).images;
         if (!imgs) return [];
         if (typeof imgs === 'string') {
-          const s = imgs.trim();
-          if (s.startsWith('[')) {
+          if (imgs.startsWith('[')) {
             try {
-              return JSON.parse(s);
+              return JSON.parse(imgs);
             } catch {
-              return s.replace(/^[\[]|[\]]$/g, '').split(',').map((x: any) => String(x).trim()).filter(Boolean);
+              return imgs.replace(/^[\[]|[\]]$/g, '').split(',').map((x: any) => String(x).trim()).filter(Boolean);
             }
           }
-          return s.split(',').map((x: any) => String(x).trim()).filter(Boolean);
+          return [imgs];
         }
         return Array.isArray(imgs) ? imgs : [];
       })(),
