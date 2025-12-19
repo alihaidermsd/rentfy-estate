@@ -558,7 +558,7 @@ export default function RevenueDashboard() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {propertyRevenue.slice(0, 10).map((property) => (
+              {Array.isArray(propertyRevenue) && propertyRevenue.slice(0, 10).map((property) => (
                 <tr key={property.propertyId} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div className="font-medium text-gray-900">{property.title}</div>

@@ -51,10 +51,12 @@ export async function GET(request: NextRequest) {
         ...payment.booking,
         property: {
           ...payment.booking.property,
-          images: JSON.parse(payment.booking.property.images || '[]')
+          images: payment.booking.property.images
+            ? payment.booking.property.images.split(',').filter(Boolean)
+            : []
         }
       }
-    }))
+    }));
 
     return NextResponse.json({
       success: true,

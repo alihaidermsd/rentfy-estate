@@ -624,7 +624,7 @@ async function getAdminBookingStats() {
         strftime('%Y-%m-01', "createdAt") as month,
         COUNT(*) as count,
         COALESCE(SUM("totalAmount"), 0) as revenue
-      FROM "Booking"
+      FROM "bookings"
       WHERE "createdAt" >= DATETIME(julianday('now', '-6 months'))
         AND status IN ('COMPLETED', 'CHECKED_OUT')
       GROUP BY strftime('%Y-%m-01', "createdAt")

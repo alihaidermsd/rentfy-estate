@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import PropertyForm from "@/components/forms/PropertyForm";
+import { PropertyForm } from "@/components/forms/PropertyForm";
 import { getProperty } from "@/lib/properties"; // This function needs to be created
 import { Property } from "@/types/property";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";

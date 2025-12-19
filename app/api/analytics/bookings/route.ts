@@ -208,7 +208,7 @@ export async function GET(request: NextRequest) {
           return {
             property: property ? {
               ...property,
-              images: JSON.parse(property.images || '[]')
+              images: property.images ? property.images.split(',').filter(Boolean) : []
             } : null,
             bookings: item._count.id,
             revenue: item._sum.totalAmount || 0
