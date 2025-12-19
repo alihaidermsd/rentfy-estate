@@ -150,7 +150,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <Link 
-              href="/dashboard/admin/users" 
+              href="/admin/users" 
               className="text-blue-600 hover:text-blue-800 text-sm font-medium"
             >
               View All →
@@ -181,7 +181,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <Link 
-              href="/dashboard/admin/properties" 
+              href="/admin/properties" 
               className="text-green-600 hover:text-green-800 text-sm font-medium"
             >
               View All →
@@ -212,7 +212,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <Link 
-              href="/dashboard/admin/bookings" 
+              href="/admin/bookings" 
               className="text-purple-600 hover:text-purple-800 text-sm font-medium"
             >
               View All →
@@ -243,7 +243,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <Link 
-              href="/dashboard/admin/revenue" 
+              href="/admin/revenue" 
               className="text-yellow-600 hover:text-yellow-800 text-sm font-medium"
             >
               View All →

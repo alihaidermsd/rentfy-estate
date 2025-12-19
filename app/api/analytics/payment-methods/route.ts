@@ -137,22 +137,24 @@ async function getPaymentMethodsByDateRange(start: Date, end: Date) {
     }, 0);
 
     // Convert map to array and calculate percentages
-    const methodsArray = Array.from(methodStats.values()).map(stats => {
-      const netAmount = stats.total - stats.refunds;
-      const percentage = totalAllPayments > 0 ? (stats.total / totalAllPayments) * 100 : 0;
-      
-      return {
-        method: stats.method,
-        displayName: formatPaymentMethodName(stats.method),
-        count: stats.count,
-        total: stats.total,
-        refunds: stats.refunds,
-        netAmount,
-        percentage: parseFloat(percentage.toFixed(2)),
-        avgTransaction: stats.count > 0 ? stats.total / stats.count : 0,
-        successRate: await calculateSuccessRate(stats.method, start, end)
-      };
-    });
+    const methodsArray = await Promise.all(
+      Array.from(methodStats.values()).map(async stats => {
+        const netAmount = stats.total - stats.refunds;
+        const percentage = totalAllPayments > 0 ? (stats.total / totalAllPayments) * 100 : 0;
+        
+        return {
+          method: stats.method,
+          displayName: formatPaymentMethodName(stats.method),
+          count: stats.count,
+          total: stats.total,
+          refunds: stats.refunds,
+          netAmount,
+          percentage: parseFloat(percentage.toFixed(2)),
+          avgTransaction: stats.count > 0 ? stats.total / stats.count : 0,
+          successRate: await calculateSuccessRate(stats.method, start, end)
+        };
+      })
+    );
 
     // Sort by total revenue (highest first)
     methodsArray.sort((a, b) => b.total - a.total);
