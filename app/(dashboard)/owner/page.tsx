@@ -44,7 +44,7 @@ export default function OwnerDashboard() {
         const response = await fetch('/api/analytics/dashboard/owner');
         if (!response.ok) {
           if (response.status === 401) {
-            router.push('/auth/login');
+            router.push('/login');
             return;
           }
           throw new Error('Failed to fetch stats');

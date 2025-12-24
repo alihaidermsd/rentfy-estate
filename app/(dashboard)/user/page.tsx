@@ -19,7 +19,7 @@ export default function UserDashboard() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/auth/login');
+      router.push('/login');
       return;
     }
 
@@ -28,7 +28,7 @@ export default function UserDashboard() {
         const response = await fetch('/api/analytics/dashboard/user');
         if (!response.ok) {
           if (response.status === 401) {
-            router.push('/auth/login');
+            router.push('/login');
             return;
           }
           throw new Error('Failed to fetch stats');
